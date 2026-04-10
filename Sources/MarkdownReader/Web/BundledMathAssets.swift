@@ -1,6 +1,8 @@
 import Foundation
 
 struct BundledMathAssets {
+    private static let resourceBundleName = "MarkdownReader_MarkdownReader.bundle"
+
     let katexCSS: String
     let katexScript: String
     let autoRenderScript: String
@@ -41,14 +43,42 @@ struct BundledMathAssets {
     }
 
     private static func resolvedResourceDirectory() -> URL? {
-        guard let bundleRoot = Bundle.module.resourceURL else { return nil }
+        // `Bundle.module` traps in the packaged `.app` because SwiftPM's generated
+        // accessor expects the resource bundle beside `Bundle.main.bundleURL`,
+        // while app bundles store it in `Contents/Resources`.
+        for candidate in resourceBundleCandidates() {
+            if let directory = katexDirectoryIfPresent(in: candidate) {
+                return directory
+            }
+        }
 
+        return nil
+    }
+
+    private static func resourceBundleCandidates() -> [URL] {
+        let mainBundle = Bundle.main
+        let executableContainer = mainBundle.bundleURL.deletingLastPathComponent()
+
+        return [
+            mainBundle.resourceURL,
+            mainBundle.resourceURL?.appending(path: resourceBundleName, directoryHint: .isDirectory),
+            mainBundle.bundleURL.appending(path: resourceBundleName, directoryHint: .isDirectory),
+            executableContainer.appending(path: "Resources", directoryHint: .isDirectory),
+            executableContainer.appending(path: "Resources/\(resourceBundleName)", directoryHint: .isDirectory)
+        ].compactMap { $0 }
+    }
+
+    private static func katexDirectoryIfPresent(in bundleRoot: URL) -> URL? {
         let nestedKaTeX = bundleRoot.appending(path: "KaTeX", directoryHint: .isDirectory)
         if FileManager.default.fileExists(atPath: nestedKaTeX.appending(path: "katex.min.css").path) {
             return nestedKaTeX
         }
 
-        return bundleRoot
+        if FileManager.default.fileExists(atPath: bundleRoot.appending(path: "katex.min.css").path) {
+            return bundleRoot
+        }
+
+        return nil
     }
 
     private static func inlineFontDataURIs(in css: String, katexDirectory: URL?) throws -> String {
