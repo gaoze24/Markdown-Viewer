@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct WelcomeView: View {
@@ -7,155 +8,401 @@ struct WelcomeView: View {
     let openRecentAction: (RecentFileItem) -> Void
     let isDropTargeted: Bool
 
+    private var continueReadingItem: RecentFileItem? {
+        recentFiles.first
+    }
+
+    private var remainingRecentFiles: [RecentFileItem] {
+        Array(recentFiles.dropFirst())
+    }
+
+    private var displayedRecentFiles: [RecentFileItem] {
+        remainingRecentFiles.isEmpty ? recentFiles : remainingRecentFiles
+    }
+
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
-                VStack(spacing: 28) {
-                    heroCard
-                    .padding(.top, 28)
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 30)
-                    .frame(maxWidth: 780)
-                    .background(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                    .strokeBorder(
-                                        isDropTargeted ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.08),
-                                        lineWidth: isDropTargeted ? 2 : 1
-                                    )
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.06), radius: 30, y: 10)
+                VStack(alignment: .leading, spacing: 28) {
+                    headerSection
 
                     if let errorMessage {
-                        Text(errorMessage)
-                            .font(.callout)
-                            .foregroundStyle(.red)
+                        inlineMessage(errorMessage, tint: AppTheme.warning)
                     }
 
-                    if !recentFiles.isEmpty {
-                        recentReadsSection
-                        .frame(maxWidth: 780, alignment: .leading)
+                    if isDropTargeted {
+                        inlineMessage("Drop a Markdown file to open it here.", tint: AppTheme.tint)
                     }
+
+                    if let continueReadingItem {
+                        continueReadingSection(item: continueReadingItem)
+                    }
+
+                    if recentFiles.isEmpty {
+                        emptyLibrarySection
+                    } else {
+                        recentFilesSection
+                    }
+
+                    utilityStrip
                 }
-                .frame(minHeight: max(proxy.size.height - 20, 680))
-                .padding(32)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: 920, alignment: .leading)
+                .padding(.horizontal, 34)
+                .padding(.top, 30)
+                .padding(.bottom, 36)
+                .frame(maxWidth: .infinity, minHeight: max(proxy.size.height - 12, 620), alignment: .top)
             }
         }
     }
 
-    private var heroCard: some View {
-        VStack(spacing: 22) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.93, green: 0.9, blue: 0.82),
-                                Color(red: 0.82, green: 0.86, blue: 0.82)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+    private var headerSection: some View {
+        HStack(alignment: .bottom, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Library")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(AppTheme.tertiaryText)
+
+                Text(recentFiles.isEmpty ? "No recent Markdown files" : "Recent Markdown Files")
+                    .font(.system(size: 27, weight: .semibold))
+                    .foregroundStyle(AppTheme.primaryText)
+
+                Text(statusLine)
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+
+            Spacer()
+
+            Button(action: openAction) {
+                Label("Open File", systemImage: "folder.badge.plus")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func continueReadingSection(item: RecentFileItem) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("Continue Reading")
+
+            LibraryFeatureRow(
+                item: item,
+                eyebrow: "Most recent",
+                emphasis: .featured,
+                openAction: { openRecentAction(item) }
+            )
+        }
+    }
+
+    private var recentFilesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel(continueReadingItem == nil ? "Recent Markdown Files" : "More Recent Files")
+
+            if remainingRecentFiles.isEmpty, continueReadingItem != nil {
+                secondaryNote("The latest document is ready above.")
+                    .padding(.top, 2)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(displayedRecentFiles) { item in
+                        LibraryListRow(
+                            item: item,
+                            openAction: { openRecentAction(item) }
                         )
-                    )
-                    .frame(width: 96, height: 96)
-                Image(systemName: "text.document")
-                    .font(.system(size: 36, weight: .medium))
-                    .foregroundStyle(Color(red: 0.2, green: 0.28, blue: 0.29))
-            }
 
-            VStack(spacing: 10) {
-                Text("Markdown Reader")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                Text("A calm, lightweight way to read local Markdown on macOS.")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 560)
-            }
-
-            HStack(spacing: 14) {
-                Button(action: openAction) {
-                    Label("Open Markdown File", systemImage: "folder")
-                        .padding(.horizontal, 18)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-
-                Text("or drop a file anywhere in the window")
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var recentReadsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Reads")
-                .font(.title3.weight(.semibold))
-
-            VStack(spacing: 10) {
-                ForEach(recentFiles) { item in
-                    recentRow(for: item)
-                }
-            }
-        }
-    }
-
-    private func recentRow(for item: RecentFileItem) -> some View {
-        Button {
-            openRecentAction(item)
-        } label: {
-            HStack(spacing: 14) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-                    .frame(width: 42, height: 42)
-                    .overlay {
-                        icon(for: item)
+                        if item.id != displayedRecentFiles.last?.id {
+                            Divider()
+                                .padding(.leading, 52)
+                        }
                     }
+                }
+                .background(AppTheme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(AppTheme.softBorder, lineWidth: 1)
+                )
+            }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name)
+    private var emptyLibrarySection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            sectionLabel("Workspace")
+
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(width: 36, height: 36)
+                    .background(AppTheme.iconTile, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Open a local Markdown file to start reading.")
                         .font(.headline)
-                        .foregroundStyle(item.isAvailable ? .primary : .secondary)
+                        .foregroundStyle(AppTheme.primaryText)
+                    Text("Recent documents will appear here once you’ve opened a file. You can also drag a document into the window at any time.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button(action: openAction) {
+                        Label("Choose Markdown File", systemImage: "folder")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .padding(.vertical, 10)
+        }
+    }
+
+    private var utilityStrip: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Label("Drag files into the window to open them", systemImage: "arrow.down.doc")
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+
+            Divider()
+                .frame(height: 14)
+
+            Text("Supports .md, .markdown, .mdown, .mkd, and .mkdn")
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+
+            Spacer()
+        }
+        .padding(.top, 4)
+    }
+
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(AppTheme.tertiaryText)
+    }
+
+    private func secondaryNote(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(AppTheme.secondaryText)
+    }
+
+    private func inlineMessage(_ message: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(tint)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private var statusLine: String {
+        if recentFiles.isEmpty {
+            return "A quiet place to open and revisit local Markdown documents."
+        }
+
+        if recentFiles.count == 1 {
+            return "Your most recent document is ready to continue."
+        }
+
+        return "Pick up where you left off or open another document."
+    }
+}
+
+private struct LibraryFeatureRow: View {
+    enum Emphasis {
+        case featured
+    }
+
+    let item: RecentFileItem
+    let eyebrow: String
+    let emphasis: Emphasis
+    let openAction: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: openAction) {
+            HStack(spacing: 16) {
+                rowIcon
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(eyebrow)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.tertiaryText)
+
+                    Text(item.name)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
                         .lineLimit(1)
+
                     Text(item.path)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(2)
                 }
 
-                Spacer()
+                Spacer(minLength: 20)
 
-                if !item.isAvailable {
-                    Text("Missing")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.orange.opacity(0.12), in: Capsule())
+                VStack(alignment: .trailing, spacing: 10) {
+                    availabilityBadge
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .opacity(isHovered && item.isAvailable ? 1 : 0.45)
+                        .offset(x: isHovered && item.isAvailable ? 2 : 0)
                 }
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.primary.opacity(0.03))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
         .disabled(!item.isAvailable)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.14)) {
+                isHovered = hovering
+            }
+        }
+        .contextMenu {
+            documentContextMenu(for: item, openAction: openAction)
+        }
+    }
+
+    private var backgroundStyle: Color {
+        if isHovered && item.isAvailable {
+            return AppTheme.subtleAccentFill
+        }
+        return AppTheme.elevatedSurface
+    }
+
+    private var borderColor: Color {
+        isHovered && item.isAvailable ? AppTheme.subtleAccentBorder : AppTheme.softBorder
+    }
+
+    private var rowIcon: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(AppTheme.iconTile)
+            .frame(width: 48, height: 48)
+            .overlay {
+                if item.isAvailable {
+                    Image(systemName: "doc.richtext")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(AppTheme.secondaryText)
+                } else {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(AppTheme.warning)
+                }
+            }
     }
 
     @ViewBuilder
-    private func icon(for item: RecentFileItem) -> some View {
+    private var availabilityBadge: some View {
         if item.isAvailable {
-            Image(systemName: "doc.plaintext")
-                .foregroundStyle(.secondary)
+            Text("Continue")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.secondaryText)
+        } else {
+            Text("Missing")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.warning)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(AppTheme.warning.opacity(0.14), in: Capsule())
+        }
+    }
+}
+
+private struct LibraryListRow: View {
+    let item: RecentFileItem
+    let openAction: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: openAction) {
+            HStack(spacing: 14) {
+                icon
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.name)
+                        .font(.headline)
+                        .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
+                        .lineLimit(1)
+                    Text(item.path)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 12)
+
+                if item.isAvailable {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.tertiaryText)
+                        .opacity(isHovered ? 1 : 0.55)
+                } else {
+                    Text("Missing")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(AppTheme.warning)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(isHovered && item.isAvailable ? AppTheme.subtleAccentFill : .clear)
+        }
+        .buttonStyle(.plain)
+        .disabled(!item.isAvailable)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
+        .contextMenu {
+            documentContextMenu(for: item, openAction: openAction)
+        }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if item.isAvailable {
+            Image(systemName: "doc.text")
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(width: 22)
         } else {
             Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppTheme.warning)
+                .frame(width: 22)
+        }
+    }
+}
+
+@MainActor
+@ViewBuilder
+private func documentContextMenu(for item: RecentFileItem, openAction: @escaping () -> Void) -> some View {
+    Button("Open") {
+        openAction()
+    }
+    .disabled(!item.isAvailable)
+
+    if item.isAvailable {
+        Button("Reveal in Finder") {
+            NSWorkspace.shared.activateFileViewerSelecting([item.url])
+        }
+
+        Button("Copy Path") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(item.path, forType: .string)
         }
     }
 }

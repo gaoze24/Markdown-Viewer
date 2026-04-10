@@ -20,6 +20,7 @@ struct RootView: View {
         NavigationSplitView(columnVisibility: $splitViewVisibility) {
             SidebarView(model: model)
                 .frame(minWidth: 250, idealWidth: 280)
+                .background(AppTheme.sidebarBackground)
         } detail: {
             Group {
                 if let renderedDocument = model.renderedDocument {
@@ -38,18 +39,11 @@ struct RootView: View {
                     )
                 }
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(nsColor: .windowBackgroundColor),
-                        Color(nsColor: .underPageBackgroundColor)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+            .background(AppTheme.detailBackground)
         }
         .navigationTitle(model.windowTitle)
+        .background(AppTheme.windowBackground)
+        .tint(AppTheme.tint)
         .onChange(of: model.searchFocusToken) { _, _ in
             searchFieldFocused = true
         }
@@ -77,9 +71,10 @@ struct RootView: View {
                     VStack(spacing: 2) {
                         Text(model.windowTitle)
                             .font(.headline)
+                            .foregroundStyle(AppTheme.primaryText)
                         Text(subtitle)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.secondaryText)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: 480)
@@ -93,18 +88,19 @@ struct RootView: View {
 
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
 
                     TextField("Search", text: $model.searchQuery)
                         .textFieldStyle(.plain)
                         .frame(width: 180)
                         .focused($searchFieldFocused)
                         .disabled(!model.hasDocument)
+                        .foregroundStyle(AppTheme.primaryText)
 
                     if !model.searchQuery.isEmpty, model.hasDocument {
                         Text(model.searchResultCount == 0 ? "No results" : "\(model.currentSearchResult) / \(model.searchResultCount)")
                             .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.secondaryText)
                     }
 
                     Button {
@@ -125,7 +121,11 @@ struct RootView: View {
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 30)
-                .background(.thinMaterial, in: Capsule())
+                .background(AppTheme.chromeSurface, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(AppTheme.softBorder, lineWidth: 1)
+                )
             }
         }
     }
@@ -141,21 +141,18 @@ private struct ProgressPill: View {
                 .frame(width: 7, height: 7)
             Text("\(Int(progress * 100))%")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.secondaryText)
         }
         .padding(.horizontal, 10)
         .frame(height: 28)
-        .background(.thinMaterial, in: Capsule())
+        .background(AppTheme.chromeSurface, in: Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(AppTheme.softBorder, lineWidth: 1)
+        )
     }
 
     private var progressTint: Color {
-        switch progress {
-        case ..<0.33:
-            return Color(red: 0.76, green: 0.63, blue: 0.4)
-        case ..<0.8:
-            return Color(red: 0.35, green: 0.56, blue: 0.5)
-        default:
-            return Color(red: 0.23, green: 0.48, blue: 0.42)
-        }
+        AppTheme.progressTint(for: progress)
     }
 }

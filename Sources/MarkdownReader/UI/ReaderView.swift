@@ -28,9 +28,14 @@ struct ReaderView: View {
             if let banner = activeBanner {
                 Text(banner)
                     .font(.callout)
+                    .foregroundStyle(AppTheme.primaryText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(.thinMaterial, in: Capsule())
+                    .background(AppTheme.chromeSurface, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(AppTheme.softBorder, lineWidth: 1)
+                    )
                     .padding(.top, 10)
             }
 
@@ -38,7 +43,11 @@ struct ReaderView: View {
                 ProgressView()
                     .controlSize(.small)
                     .padding(12)
-                    .background(.thinMaterial, in: Capsule())
+                    .background(AppTheme.chromeSurface, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(AppTheme.softBorder, lineWidth: 1)
+                    )
                     .padding(.top, 16)
             }
         }

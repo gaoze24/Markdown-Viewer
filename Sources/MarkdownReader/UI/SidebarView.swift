@@ -5,12 +5,18 @@ struct SidebarView: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        List {
-            outlineSection
-            recentFilesSection
+        ZStack {
+            AppTheme.sidebarBackground
+                .ignoresSafeArea()
+
+            List {
+                outlineSection
+                recentFilesSection
+            }
+            .scrollContentBackground(.hidden)
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 280)
         }
-        .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 240, ideal: 280)
     }
 
     @ViewBuilder
@@ -19,7 +25,7 @@ struct SidebarView: View {
             Section("Outline") {
                 if renderedDocument.tableOfContents.isEmpty {
                     Text("No headings found")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
                 } else {
                     ForEach(renderedDocument.tableOfContents) { heading in
                         Button {
@@ -30,6 +36,7 @@ struct SidebarView: View {
                                     .fill(accent(for: heading.level))
                                     .frame(width: 3)
                                 Text(heading.title)
+                                    .foregroundStyle(AppTheme.primaryText)
                                     .lineLimit(2)
                                     .padding(.leading, CGFloat(max(heading.level - 1, 0) * 10))
                             }
@@ -47,7 +54,7 @@ struct SidebarView: View {
         Section("Recent Files") {
             if model.recentFiles.isEmpty {
                 Text("Open a Markdown file to build a reading history.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             } else {
                 ForEach(model.recentFiles) { item in
                     Button {
@@ -58,11 +65,11 @@ struct SidebarView: View {
                                 recentFileIcon(isAvailable: item.isAvailable)
                                 Text(item.name)
                                     .lineLimit(1)
-                                    .foregroundStyle(item.isAvailable ? Color.primary : Color.secondary)
+                                    .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
                             }
                             Text(item.path)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppTheme.secondaryText)
                                 .lineLimit(2)
                         }
                         .padding(.vertical, 2)
@@ -82,21 +89,14 @@ struct SidebarView: View {
     private func recentFileIcon(isAvailable: Bool) -> some View {
         if isAvailable {
             Image(systemName: "doc.text")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.secondaryText)
         } else {
             Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppTheme.warning)
         }
     }
 
     private func accent(for level: Int) -> Color {
-        switch level {
-        case 1:
-            return Color(red: 0.3, green: 0.46, blue: 0.43)
-        case 2:
-            return Color(red: 0.48, green: 0.58, blue: 0.5)
-        default:
-            return Color(red: 0.7, green: 0.72, blue: 0.68)
-        }
+        AppTheme.outlineAccent(for: level)
     }
 }

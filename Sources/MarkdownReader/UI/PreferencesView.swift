@@ -21,13 +21,15 @@ struct PreferencesView: View {
                         .frame(width: 220)
                     Text("\(Int(readingWidth)) px")
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
             }
 
             Toggle("Show reading progress in the toolbar", isOn: $showProgress)
         }
+        .tint(AppTheme.tint)
         .padding(24)
         .frame(width: 420)
+        .background(AppTheme.detailBackground)
     }
 }

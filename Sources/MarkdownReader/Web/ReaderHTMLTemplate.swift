@@ -18,44 +18,44 @@ enum ReaderHTMLTemplate {
                     color-scheme: light dark;
                     --reader-width: \(Int(settings.readingWidth))px;
                     --base-font-size: \(String(format: "%.1f", settings.baseFontSize))px;
-                    --page-bg: #f4f1e9;
-                    --page-bg-secondary: #ece8df;
-                    --page-grid: rgba(34, 41, 43, 0.032);
-                    --text: #1d2426;
-                    --muted: #647072;
-                    --border: rgba(35, 41, 43, 0.12);
-                    --soft-border: rgba(35, 41, 43, 0.08);
-                    --surface-weak: rgba(255, 255, 255, 0.32);
-                    --surface-strong: rgba(255, 255, 255, 0.5);
-                    --blockquote-bg: rgba(214, 221, 217, 0.32);
-                    --code-bg: rgba(48, 60, 62, 0.085);
-                    --code-border: rgba(48, 60, 62, 0.12);
-                    --table-row: rgba(0, 0, 0, 0.018);
-                    --accent: #40675f;
-                    --accent-soft: rgba(64, 103, 95, 0.14);
-                    --search-bg: rgba(235, 198, 92, 0.42);
-                    --search-current: rgba(218, 141, 53, 0.46);
+                    --page-bg: #f8f3ea;
+                    --page-bg-secondary: #f2ebdf;
+                    --page-grid: rgba(93, 74, 53, 0.035);
+                    --text: #2c241d;
+                    --muted: #786d61;
+                    --border: rgba(82, 62, 42, 0.14);
+                    --soft-border: rgba(82, 62, 42, 0.08);
+                    --surface-weak: rgba(251, 245, 237, 0.76);
+                    --surface-strong: rgba(244, 236, 226, 0.92);
+                    --blockquote-bg: rgba(164, 133, 95, 0.09);
+                    --code-bg: rgba(98, 78, 56, 0.075);
+                    --code-border: rgba(98, 78, 56, 0.11);
+                    --table-row: rgba(93, 73, 53, 0.032);
+                    --accent: #8b6a46;
+                    --accent-soft: rgba(139, 106, 70, 0.14);
+                    --search-bg: rgba(228, 191, 112, 0.34);
+                    --search-current: rgba(209, 151, 75, 0.38);
                 }
 
                 @media (prefers-color-scheme: dark) {
                     :root {
-                        --page-bg: #131617;
-                        --page-bg-secondary: #16191a;
-                        --page-grid: rgba(255, 255, 255, 0.03);
-                        --text: #e8ebe7;
-                        --muted: #a1a8a6;
-                        --border: rgba(255, 255, 255, 0.09);
-                        --soft-border: rgba(255, 255, 255, 0.055);
-                        --surface-weak: rgba(255, 255, 255, 0.03);
-                        --surface-strong: rgba(255, 255, 255, 0.06);
-                        --blockquote-bg: rgba(90, 101, 98, 0.2);
-                        --code-bg: rgba(255, 255, 255, 0.055);
-                        --code-border: rgba(255, 255, 255, 0.08);
-                        --table-row: rgba(255, 255, 255, 0.028);
-                        --accent: #9abdae;
-                        --accent-soft: rgba(154, 189, 174, 0.12);
-                        --search-bg: rgba(196, 145, 47, 0.34);
-                        --search-current: rgba(214, 163, 67, 0.56);
+                        --page-bg: #17120f;
+                        --page-bg-secondary: #1d1713;
+                        --page-grid: rgba(241, 229, 214, 0.028);
+                        --text: #eee3d6;
+                        --muted: #b3a391;
+                        --border: rgba(238, 223, 204, 0.12);
+                        --soft-border: rgba(238, 223, 204, 0.07);
+                        --surface-weak: rgba(255, 246, 234, 0.03);
+                        --surface-strong: rgba(255, 245, 231, 0.05);
+                        --blockquote-bg: rgba(201, 161, 107, 0.08);
+                        --code-bg: rgba(255, 243, 228, 0.05);
+                        --code-border: rgba(255, 243, 228, 0.085);
+                        --table-row: rgba(255, 243, 228, 0.026);
+                        --accent: #d0aa79;
+                        --accent-soft: rgba(208, 170, 121, 0.14);
+                        --search-bg: rgba(196, 150, 74, 0.32);
+                        --search-current: rgba(216, 169, 93, 0.46);
                     }
                 }
 
@@ -69,9 +69,7 @@ enum ReaderHTMLTemplate {
 
                 html {
                     scroll-behavior: smooth;
-                    background:
-                        linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.08)),
-                        linear-gradient(180deg, var(--page-bg), var(--page-bg-secondary));
+                    background: var(--page-bg);
                 }
 
                 body {
@@ -83,9 +81,7 @@ enum ReaderHTMLTemplate {
                     text-rendering: optimizeLegibility;
                     -webkit-font-smoothing: antialiased;
                     overflow-wrap: anywhere;
-                    background:
-                        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 22%),
-                        linear-gradient(90deg, transparent 0, transparent calc(50% - var(--reader-width) / 2 - 64px), var(--page-grid) calc(50% - var(--reader-width) / 2 - 64px), var(--page-grid) calc(50% - var(--reader-width) / 2 - 63px), transparent calc(50% - var(--reader-width) / 2 - 63px), transparent calc(50% + var(--reader-width) / 2 + 63px), var(--page-grid) calc(50% + var(--reader-width) / 2 + 63px), var(--page-grid) calc(50% + var(--reader-width) / 2 + 64px), transparent calc(50% + var(--reader-width) / 2 + 64px), transparent 100%);
+                    background: var(--page-bg);
                 }
 
                 main {
@@ -131,6 +127,7 @@ enum ReaderHTMLTemplate {
                 }
 
                 a:hover {
+                    color: color-mix(in srgb, var(--accent) 90%, var(--text) 10%);
                     border-bottom-color: var(--accent);
                 }
 
@@ -218,7 +215,7 @@ enum ReaderHTMLTemplate {
                 pre.code-block {
                     overflow: auto;
                     padding: 18px 20px;
-                    background: linear-gradient(180deg, color-mix(in srgb, var(--code-bg) 84%, transparent), color-mix(in srgb, var(--code-bg) 100%, transparent));
+                    background: color-mix(in srgb, var(--code-bg) 92%, var(--page-bg) 8%);
                     border: 1px solid var(--code-border);
                     border-radius: 16px;
                 }
@@ -236,14 +233,14 @@ enum ReaderHTMLTemplate {
                     border: none;
                     height: 1px;
                     margin: 2.2em 0;
-                    background: linear-gradient(90deg, transparent, var(--border), transparent);
+                    background: var(--border);
                 }
 
                 .table-wrap {
                     overflow-x: auto;
                     border: 1px solid var(--soft-border);
                     border-radius: 16px;
-                    background: var(--surface-weak);
+                    background: color-mix(in srgb, var(--surface-strong) 88%, var(--page-bg) 12%);
                 }
 
                 table {
@@ -277,7 +274,7 @@ enum ReaderHTMLTemplate {
                     border-radius: 16px;
                     display: block;
                     margin: 1.2em auto;
-                    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 10px 24px rgba(59, 45, 33, 0.08);
                 }
 
                 .inline-image {
@@ -288,7 +285,7 @@ enum ReaderHTMLTemplate {
                     border: 1px solid var(--soft-border);
                     border-radius: 16px;
                     padding: 14px 18px;
-                    background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
+                    background: color-mix(in srgb, var(--surface-strong) 92%, var(--page-bg) 8%);
                 }
 
                 .details-block summary {
