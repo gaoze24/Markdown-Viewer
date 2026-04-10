@@ -311,14 +311,23 @@ private struct Parser {
 
             let markerWidth = marker.marker.count + 1
             var itemLines = [marker.content]
+            var sawBlankLine = false
             index += 1
 
             while index < input.count {
                 let line = input[index]
                 if line.trimmingCharacters(in: .whitespaces).isEmpty {
                     itemLines.append("")
+                    sawBlankLine = true
                     index += 1
                     continue
+                }
+
+                let lineIndent = leadingSpaces(in: line)
+                if lineIndent <= listIndent {
+                    if sawBlankLine || wouldStartNewBlock(line, nextLine: index + 1 < input.count ? input[index + 1] : nil) {
+                        break
+                    }
                 }
 
                 if let nextMarker = listMarker(for: line), nextMarker.indent == listIndent, nextMarker.isOrdered == ordered {
@@ -327,6 +336,7 @@ private struct Parser {
 
                 let dedent = min(leadingSpaces(in: line), listIndent + markerWidth)
                 itemLines.append(line.trimmingLeadingSpaces(dedent))
+                sawBlankLine = false
                 index += 1
             }
 

@@ -24,7 +24,20 @@ extension String {
             .replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
             .replacingOccurrences(of: #"\[\^([^\]]+)\]"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"`([^`]+)`"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\\\((.+?)\\\)"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\\\[(.+?)\\\]"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"(?<!\\)\$\$(.+?)(?<!\\)\$\$"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"(?<!\\)\$(?!\$)(.+?)(?<!\\)\$"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(
+                of: #"\\(mathbb|mathbf|mathrm|mathit|mathsf|mathtt|mathcal|operatorname|text)\{([^{}]+)\}"#,
+                with: "$2",
+                options: .regularExpression
+            )
+            .replacingOccurrences(of: #"\\(left|right|displaystyle|textstyle|scriptstyle|scriptscriptstyle)\b"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\\([{}\[\]()])"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\\[,;:!]"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"[*_~#>`]"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

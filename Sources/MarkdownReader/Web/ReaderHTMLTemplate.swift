@@ -18,6 +18,11 @@ enum ReaderHTMLTemplate {
                     color-scheme: light dark;
                     --reader-width: \(Int(settings.readingWidth))px;
                     --base-font-size: \(String(format: "%.1f", settings.baseFontSize))px;
+                    --viewport-padding-x: clamp(26px, 4vw, 56px);
+                    --viewport-padding-top: 56px;
+                    --viewport-padding-bottom: 96px;
+                    --block-space: 1.18em;
+                    --section-space: 2.12em;
                     --page-bg: #f8f3ea;
                     --page-bg-secondary: #f2ebdf;
                     --page-grid: rgba(93, 74, 53, 0.035);
@@ -85,10 +90,25 @@ enum ReaderHTMLTemplate {
                 }
 
                 main {
-                    width: min(100%, calc(var(--reader-width) + 96px));
+                    width: min(100%, calc(var(--reader-width) + (var(--viewport-padding-x) * 2)));
                     margin: 0 auto;
-                    padding: 34px 48px 58px;
+                    padding:
+                        calc(var(--viewport-padding-top) + env(safe-area-inset-top, 0px))
+                        var(--viewport-padding-x)
+                        calc(var(--viewport-padding-bottom) + env(safe-area-inset-bottom, 0px));
                     animation: fadeIn 180ms ease-out;
+                }
+
+                main > :first-child {
+                    margin-top: 0 !important;
+                }
+
+                main > :last-child {
+                    margin-bottom: 0 !important;
+                }
+
+                main > :first-child:is(h1, h2, h3, h4, h5, h6) {
+                    padding-top: 0.08em;
                 }
 
                 @keyframes fadeIn {
@@ -99,21 +119,21 @@ enum ReaderHTMLTemplate {
                 h1, h2, h3, h4, h5, h6 {
                     font-family: "SF Pro Display", "Avenir Next", system-ui, sans-serif;
                     color: var(--text);
-                    line-height: 1.14;
+                    line-height: 1.18;
                     letter-spacing: -0.03em;
-                    margin: 1.8em 0 0.65em;
+                    margin: var(--section-space) 0 0.72em;
                     position: relative;
-                    scroll-margin-top: 32px;
+                    scroll-margin-top: 74px;
                 }
 
-                h1 { font-size: 2.34em; margin-top: 0.18em; }
+                h1 { font-size: 2.34em; margin-top: 0; margin-bottom: 0.82em; line-height: 1.1; }
                 h2 { font-size: 1.76em; }
                 h3 { font-size: 1.38em; }
                 h4 { font-size: 1.16em; }
                 h5, h6 { font-size: 1em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
-                p, ul, ol, blockquote, pre, table, .details-block, .math-block-source {
-                    margin: 1.1em 0;
+                p, ul, ol, blockquote, pre, .table-wrap, .details-block, .math-block-source {
+                    margin: var(--block-space) 0;
                 }
 
                 p:first-child {
@@ -151,10 +171,11 @@ enum ReaderHTMLTemplate {
                 }
 
                 blockquote {
-                    padding: 0.18em 0 0.18em 1.18em;
+                    padding: 0.42em 0 0.42em 1.18em;
                     border-left: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
                     background: var(--blockquote-bg);
                     border-radius: 0 16px 16px 0;
+                    margin: 1.34em 0 1.42em;
                 }
 
                 blockquote > :first-child {
@@ -166,15 +187,16 @@ enum ReaderHTMLTemplate {
                 }
 
                 ul, ol {
+                    margin: 1.08em 0 1.24em;
                     padding-left: 1.45em;
                 }
 
                 li + li {
-                    margin-top: 0.38em;
+                    margin-top: 0.42em;
                 }
 
                 li > p {
-                    margin: 0.5em 0;
+                    margin: 0.56em 0;
                 }
 
                 .task-item {
@@ -218,6 +240,7 @@ enum ReaderHTMLTemplate {
                     background: color-mix(in srgb, var(--code-bg) 92%, var(--page-bg) 8%);
                     border: 1px solid var(--code-border);
                     border-radius: 16px;
+                    margin: 1.3em 0 1.42em;
                 }
 
                 pre code {
@@ -232,7 +255,7 @@ enum ReaderHTMLTemplate {
                 hr {
                     border: none;
                     height: 1px;
-                    margin: 2.2em 0;
+                    margin: 2.45em 0;
                     background: var(--border);
                 }
 
@@ -241,6 +264,7 @@ enum ReaderHTMLTemplate {
                     border: 1px solid var(--soft-border);
                     border-radius: 16px;
                     background: color-mix(in srgb, var(--surface-strong) 88%, var(--page-bg) 12%);
+                    margin: 1.28em 0 1.4em;
                 }
 
                 table {
@@ -308,6 +332,7 @@ enum ReaderHTMLTemplate {
                 .math-block-source {
                     white-space: pre-wrap;
                     overflow-x: auto;
+                    margin: 1.5em 0 1.62em;
                 }
 
                 .katex {
@@ -315,10 +340,10 @@ enum ReaderHTMLTemplate {
                 }
 
                 .katex-display {
-                    margin: 1.5em 0 1.6em;
+                    margin: 1.78em 0 1.92em;
                     overflow-x: auto;
                     overflow-y: hidden;
-                    padding: 0.2em 0.16em 0.45em;
+                    padding: 0.32em 0.24em 0.62em;
                     scrollbar-gutter: stable both-edges;
                 }
 
@@ -359,7 +384,7 @@ enum ReaderHTMLTemplate {
                 @media (max-width: 880px) {
                     main {
                         width: 100%;
-                        padding: 22px 18px 40px;
+                        padding: 38px 20px 72px;
                     }
 
                     h1 { font-size: 2.05em; }

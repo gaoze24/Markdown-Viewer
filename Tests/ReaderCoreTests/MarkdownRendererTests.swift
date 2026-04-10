@@ -92,4 +92,42 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(document.bodyHTML.contains(Data(equation.utf8).base64EncodedString()))
         XCTAssertFalse(document.bodyHTML.contains("&#39;"))
     }
+
+    func testRendererResetsOrderedListNumberingForSeparateLists() {
+        let markdown = """
+        ## Earlier Chain
+
+        9. Ninth
+        10. Tenth
+
+        ## The main conceptual chain of the chapter
+
+        1. First
+        2. Second
+        3. Third
+        4. Fourth
+        5. Fifth
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+        let earlierListCount = document.bodyHTML.components(separatedBy: "<ol start=\"9\">").count - 1
+        let resetListCount = document.bodyHTML.components(separatedBy: "<ol start=\"1\">").count - 1
+
+        XCTAssertEqual(earlierListCount, 1)
+        XCTAssertEqual(resetListCount, 1)
+    }
+
+    func testRendererCleansInlineMathDelimitersFromOutlineTitles() {
+        let markdown = """
+        ## 5. How the new measure is built when the numeraire is $N(t)$
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertEqual(
+            document.tableOfContents.map(\.title),
+            ["5. How the new measure is built when the numeraire is N(t)"]
+        )
+        XCTAssertFalse(document.tableOfContents[0].title.contains("$"))
+    }
 }

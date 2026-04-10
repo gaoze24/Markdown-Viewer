@@ -3,6 +3,11 @@ import SwiftUI
 import WebKit
 
 struct MarkdownWebView: NSViewRepresentable {
+    private enum Layout {
+        static let topInset: CGFloat = 12
+        static let bottomInset: CGFloat = 18
+    }
+
     let bodyHTML: String
     let baseURL: URL?
     let displaySettings: ReaderDisplaySettings
@@ -26,17 +31,28 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.setValue(false, forKey: "drawsBackground")
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = false
+        configureScrollInsets(for: webView)
         context.coordinator.loadIfNeeded(in: webView, parent: self)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        configureScrollInsets(for: webView)
         context.coordinator.parent = self
         context.coordinator.loadIfNeeded(in: webView, parent: self)
         context.coordinator.applyDisplaySettingsIfNeeded(on: webView)
         context.coordinator.applySearchIfNeeded(on: webView)
         context.coordinator.applySearchNavigationIfNeeded(on: webView)
         context.coordinator.applyAnchorNavigationIfNeeded(on: webView)
+    }
+
+    private func configureScrollInsets(for webView: WKWebView) {
+        let insets = NSEdgeInsets(top: Layout.topInset, left: 0, bottom: Layout.bottomInset, right: 0)
+        guard let scrollView = webView.subviews.first(where: { $0 is NSScrollView }) as? NSScrollView else {
+            return
+        }
+        scrollView.contentInsets = insets
+        scrollView.scrollerInsets = insets
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
