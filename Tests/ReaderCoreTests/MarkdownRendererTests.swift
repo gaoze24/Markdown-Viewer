@@ -1,3 +1,4 @@
+import Foundation
 import ReaderCore
 import XCTest
 
@@ -45,5 +46,50 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(document.bodyHTML.contains("task-item"))
         XCTAssertTrue(document.bodyHTML.contains("class=\"footnotes\""))
         XCTAssertTrue(document.bodyHTML.contains("fnref-1"))
+    }
+
+    func testRendererPreservesInlineMathWithoutMarkdownMangling() {
+        let markdown = """
+        The variance term is $\\sigma^2$ and the expectation is \\(\\mathbb{E}[X_t^2]\\).
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("class=\"math-placeholder inline\""))
+        XCTAssertTrue(document.bodyHTML.contains(Data(#"\sigma^2"#.utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data(#"\mathbb{E}[X_t^2]"#.utf8).base64EncodedString()))
+        XCTAssertFalse(document.bodyHTML.contains("&#39;"))
+    }
+
+    func testRendererLiftsDisplayMathIntoDedicatedBlocks() {
+        let markdown = """
+        $$
+        \\int_0^t X(u)\\,dW(u)
+        $$
+
+        \\[
+        dX_t = \\mu X_t\\,dt + \\sigma X_t\\,dW_t
+        \\]
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("class=\"math-placeholder display\""))
+        XCTAssertTrue(document.bodyHTML.contains(Data(#"\int_0^t X(u)\,dW(u)"#.utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data(#"dX_t = \mu X_t\,dt + \sigma X_t\,dW_t"#.utf8).base64EncodedString()))
+    }
+
+    func testRendererPreservesPrimesAndFractionsInDisplayMathSource() {
+        let equation = #"d f(W(t)) = f'(W(t))\,dW(t) + \frac12 f''(W(t))\,dt"#
+        let markdown = """
+        $$
+        \(equation)
+        $$
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains(Data(equation.utf8).base64EncodedString()))
+        XCTAssertFalse(document.bodyHTML.contains("&#39;"))
     }
 }

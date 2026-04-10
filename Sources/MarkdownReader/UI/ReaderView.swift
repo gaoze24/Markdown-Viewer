@@ -23,14 +23,7 @@ struct ReaderView: View {
                     }
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-            )
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if let banner = activeBanner {
                 Text(banner)
@@ -49,6 +42,7 @@ struct ReaderView: View {
                     .padding(.top, 16)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var activeBanner: String? {

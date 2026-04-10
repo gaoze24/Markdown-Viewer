@@ -32,6 +32,22 @@ struct CalmReader {
 }
 ```
 
+## Math
+
+Inline math works inside prose, like $\\sigma^2$ in a diffusion coefficient or \\(\\mathbb{E}[X_t^2]\\) in a note on moments.
+
+$$
+dX_t = \\mu X_t\\,dt + \\sigma X_t\\,dW_t
+$$
+
+$$
+\\int_0^t X(u)\\,dW(u)
+$$
+
+\\[
+\\frac{1}{2}\\sigma^2
+\\]
+
 ## Tasks
 
 - [x] Open Markdown files

@@ -1,6 +1,6 @@
 # Markdown Reader
 
-Markdown Reader is a lightweight, native-feeling macOS desktop app for reading local Markdown beautifully. It is intentionally focused on calm viewing rather than editing, with a SwiftUI app shell, a polished WebKit reading surface, recent files, a generated table of contents, in-document search, drag and drop, and automatic dark mode support.
+Markdown Reader is a lightweight, native-feeling macOS desktop app for reading local Markdown beautifully. It is intentionally focused on calm viewing rather than editing, with a SwiftUI app shell, a polished WebKit reading surface, recent files, a generated table of contents, in-document search, drag and drop, automatic dark mode support, and local KaTeX-powered math rendering.
 
 ## Recommended Stack
 
@@ -8,7 +8,8 @@ Markdown Reader is a lightweight, native-feeling macOS desktop app for reading l
 
 - `SwiftUI` gives the app a native macOS split-view layout, toolbar behavior, settings window, and system appearance adaptation with very little overhead.
 - `WebKit` gives us excellent text layout, smooth scrolling, image handling, tables, internal anchor navigation, and search highlighting without shipping a heavy Electron runtime.
-- A small in-repo Markdown renderer keeps the project self-contained and avoids pulling in external dependencies for a first version.
+- A small in-repo Markdown renderer keeps the project self-contained and avoids pulling in external dependencies for the Markdown AST layer.
+- **KaTeX** is bundled locally for math because it is fast, lightweight, stable in a desktop WebView, and more performant than MathJax for a reading-first app.
 
 This keeps the app lightweight, fast to launch, maintainable, and genuinely macOS-native in the places users notice most.
 
@@ -73,10 +74,11 @@ The project is split into a small core library and a native app target:
 ## Major Design Decisions
 
 - The app is a **reader-first single-window experience** rather than a document editor.
-- Markdown is rendered into a **custom HTML template** with carefully tuned typography, spacing, code blocks, tables, blockquotes, and responsive image handling.
+- Markdown is rendered into a **custom HTML template** with carefully tuned typography, spacing, code blocks, tables, blockquotes, responsive image handling, and local KaTeX math support.
 - The **sidebar** focuses on the outline and recent files, keeping navigation useful without becoming a project browser.
 - The app uses **system appearance by default**, with minimal preferences for reading width, base font size, and toolbar progress.
 - File changes are watched so a README or notes file can **refresh automatically** if it changes on disk.
+- The preview is now **full-bleed inside its pane**: readable width is preserved with layout constraints, not a floating card or paper sheet.
 
 ## What v1 Includes
 
@@ -86,6 +88,7 @@ The project is split into a small core library and a native app target:
 - Recent files history
 - Table of contents sidebar
 - In-document search with next/previous navigation
+- Inline and display math via `$...$`, `$$...$$`, `\\(...\\)`, and `\\[...\\]`
 - Relative image support
 - Light and dark appearance
 - Auto reload on external file changes

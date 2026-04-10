@@ -24,7 +24,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "MarkdownReader",
-            dependencies: ["ReaderCore"]
+            dependencies: ["ReaderCore"],
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "ReaderCoreTests",

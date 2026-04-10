@@ -64,6 +64,11 @@ private struct Parser {
                 continue
             }
 
+            if let mathBlock = parseMathBlock(from: input, index: &index) {
+                html.append(mathBlock)
+                continue
+            }
+
             if let heading = parseHeading(from: input, index: &index) {
                 html.append(heading)
                 continue
@@ -135,6 +140,35 @@ private struct Parser {
         \(lines.joined(separator: "\n"))
         </div>
         """
+    }
+
+    private func parseMathBlock(from input: [String], index: inout Int) -> String? {
+        let trimmed = input[index].trimmingCharacters(in: .whitespaces)
+        guard let delimiter = mathBlockDelimiter(for: trimmed) else { return nil }
+
+        var mathLines = [trimmed]
+        let firstLine = trimmed
+        index += 1
+
+        if delimiter.isClosed(on: firstLine, isFirstLine: true) {
+            return mathBlockHTML(from: mathLines, delimiter: delimiter)
+        }
+
+        while index < input.count {
+            let line = input[index]
+            mathLines.append(line)
+            index += 1
+
+            if delimiter.isClosed(on: line, isFirstLine: false) {
+                break
+            }
+        }
+
+        return mathBlockHTML(from: mathLines, delimiter: delimiter)
+    }
+
+    private func mathBlockHTML(from lines: [String], delimiter: MathBlockDelimiter) -> String {
+        mathPlaceholderHTML(source: delimiter.extractSource(from: lines), display: true)
     }
 
     private mutating func parseHeading(from input: [String], index: inout Int) -> String? {
@@ -389,9 +423,10 @@ private struct Parser {
 
     private mutating func renderInline(_ text: String) -> String {
         let codeSpans = PlaceholderStore()
+        let mathSpans = PlaceholderStore()
         let media = PlaceholderStore()
 
-        var html = text.htmlEscaped()
+        var html = text
         var source = html
         html = replaceMatches(
             in: html,
@@ -405,7 +440,29 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"\!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;([^&]*)&quot;)?\)"#
+            pattern: #"\\\(((?:\\.|[^\\])+?)\\\)"#
+        ) { match in
+            mathSpans.store(mathPlaceholderHTML(
+                source: capture(match, in: source, group: 1),
+                display: false
+            ))
+        }
+
+        source = html
+        html = replaceMatches(
+            in: html,
+            pattern: #"(?<!\\)\$(?![\s$])((?:\\.|[^$\\])+?)(?<!\\)\$"#
+        ) { match in
+            mathSpans.store(mathPlaceholderHTML(
+                source: capture(match, in: source, group: 1),
+                display: false
+            ))
+        }
+
+        source = html
+        html = replaceMatches(
+            in: html,
+            pattern: #"\!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)"#
         ) { match in
             let altText = capture(match, in: source, group: 1)
             let url = capture(match, in: source, group: 2)
@@ -424,7 +481,7 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;([^&]*)&quot;)?\)"#
+            pattern: #"\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)"#
         ) { match in
             let title = capture(match, in: source, group: 3)
             let titleAttribute = !title.isEmpty
@@ -435,6 +492,7 @@ private struct Parser {
             return media.store("<a href=\"\(destination.htmlEscaped())\"\(titleAttribute)>\(label)</a>")
         }
 
+        html = html.htmlEscaped()
         source = html
         html = replaceMatches(
             in: html,
@@ -479,6 +537,7 @@ private struct Parser {
         }
 
         html = media.restore(in: html)
+        html = mathSpans.restore(in: html)
         html = codeSpans.restore(in: html)
         return html
     }
@@ -513,6 +572,16 @@ private struct Parser {
         return String(source[range])
     }
 
+    private func mathPlaceholderHTML(source: String, display: Bool) -> String {
+        let normalized = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let encoded = Data(normalized.utf8).base64EncodedString()
+        let tag = display ? "div" : "span"
+        let modeClass = display ? "display" : "inline"
+        return """
+        <\(tag) class="math-placeholder \(modeClass)" data-math-source="\(encoded)"></\(tag)>
+        """
+    }
+
     private func wouldStartNewBlock(_ line: String, nextLine: String?) -> Bool {
         if fenceInfo(for: line) != nil || listMarker(for: line) != nil {
             return true
@@ -532,7 +601,22 @@ private struct Parser {
         if line.trimmingCharacters(in: .whitespaces).hasPrefix("<details") {
             return true
         }
+        if mathBlockDelimiter(for: line.trimmingCharacters(in: .whitespaces)) != nil {
+            return true
+        }
         return false
+    }
+
+    private func mathBlockDelimiter(for trimmedLine: String) -> MathBlockDelimiter? {
+        if trimmedLine.hasPrefix("$$") {
+            return .doubleDollar
+        }
+
+        if trimmedLine.hasPrefix("\\[") {
+            return .bracket
+        }
+
+        return nil
     }
 
     private func listMarker(for line: String) -> ListMarker? {
@@ -647,14 +731,14 @@ private final class PlaceholderStore {
     private var values: [String] = []
 
     func store(_ value: String) -> String {
-        let placeholder = "%%PLACEHOLDER_\(values.count)%%"
+        let placeholder = "%%PLACEHOLDER\(values.count)%%"
         values.append(value)
         return placeholder
     }
 
     func restore(in input: String) -> String {
         values.enumerated().reduce(input) { partial, pair in
-            partial.replacingOccurrences(of: "%%PLACEHOLDER_\(pair.offset)%%", with: pair.element)
+            partial.replacingOccurrences(of: "%%PLACEHOLDER\(pair.offset)%%", with: pair.element)
         }
     }
 }
@@ -689,6 +773,59 @@ private enum TableAlignment {
             " style=\"text-align:center\""
         case .right:
             " style=\"text-align:right\""
+        }
+    }
+}
+
+private enum MathBlockDelimiter {
+    case doubleDollar
+    case bracket
+
+    func extractSource(from lines: [String]) -> String {
+        var value = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        switch self {
+        case .doubleDollar:
+            if value.hasPrefix("$$") {
+                value.removeFirst(2)
+            }
+            if value.hasSuffix("$$") {
+                value.removeLast(2)
+            }
+        case .bracket:
+            if value.hasPrefix("\\[") {
+                value.removeFirst(2)
+            }
+            if value.hasSuffix("\\]") {
+                value.removeLast(2)
+            }
+        }
+
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func isClosed(on line: String, isFirstLine: Bool) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+        switch self {
+        case .doubleDollar:
+            let segments = trimmed.components(separatedBy: "$$")
+            let occurrences = max(segments.count - 1, 0)
+
+            if isFirstLine {
+                guard occurrences >= 1 else { return false }
+                let withoutOpening = trimmed.replacingOccurrences(of: "$$", with: "", options: [], range: trimmed.range(of: "$$"))
+                return occurrences >= 2 || withoutOpening.contains("$$")
+            }
+
+            return occurrences >= 1
+
+        case .bracket:
+            if isFirstLine {
+                return String(trimmed.dropFirst(2)).contains("\\]")
+            }
+
+            return trimmed.contains("\\]")
         }
     }
 }

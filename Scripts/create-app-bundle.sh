@@ -16,6 +16,10 @@ mkdir -p "$OUTPUT_DIR/Contents/MacOS" "$OUTPUT_DIR/Contents/Resources"
 
 cp "$BIN_PATH/$EXECUTABLE_NAME" "$OUTPUT_DIR/Contents/MacOS/$APP_NAME"
 
+for bundle in "$BIN_PATH"/*.bundle(N); do
+    cp -R "$bundle" "$OUTPUT_DIR/Contents/Resources/"
+done
+
 cat > "$OUTPUT_DIR/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
