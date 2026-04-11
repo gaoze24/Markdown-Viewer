@@ -402,7 +402,8 @@ enum ReaderHTMLTemplate {
             <script>
                 const readerState = {
                     matches: [],
-                    currentMatchIndex: 0
+                    currentMatchIndex: 0,
+                    activeHeadingId: null
                 };
 
                 function postProgress() {
@@ -411,6 +412,43 @@ enum ReaderHTMLTemplate {
                     if (window.webkit?.messageHandlers?.readerProgress) {
                         window.webkit.messageHandlers.readerProgress.postMessage(progress);
                     }
+                }
+
+                function currentHeadingId() {
+                    const headings = Array.from(document.querySelectorAll('#reader-root h1[id], #reader-root h2[id], #reader-root h3[id], #reader-root h4[id], #reader-root h5[id], #reader-root h6[id]'));
+                    if (headings.length === 0) {
+                        return null;
+                    }
+
+                    const threshold = 120;
+                    let active = headings[0];
+
+                    for (const heading of headings) {
+                        if (heading.getBoundingClientRect().top <= threshold) {
+                            active = heading;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    return active?.id || null;
+                }
+
+                function postActiveHeading() {
+                    const nextHeadingId = currentHeadingId();
+                    if (readerState.activeHeadingId === nextHeadingId) {
+                        return;
+                    }
+
+                    readerState.activeHeadingId = nextHeadingId;
+                    if (window.webkit?.messageHandlers?.readerActiveHeading) {
+                        window.webkit.messageHandlers.readerActiveHeading.postMessage(nextHeadingId);
+                    }
+                }
+
+                function postReaderState() {
+                    postProgress();
+                    postActiveHeading();
                 }
 
                 function applyDisplaySettings(fontSize, width) {
@@ -570,9 +608,9 @@ enum ReaderHTMLTemplate {
 
                 window.addEventListener('load', () => {
                     renderMath();
-                    postProgress();
+                    postReaderState();
                 });
-                window.addEventListener('scroll', postProgress, { passive: true });
+                window.addEventListener('scroll', postReaderState, { passive: true });
             </script>
         </body>
         </html>

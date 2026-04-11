@@ -31,10 +31,35 @@ struct AnchorNavigationRequest: Equatable {
     let anchor: String
 }
 
+struct OutlineRowItem: Identifiable, Equatable {
+    let heading: TableOfContentsItem
+    let depth: Int
+    let isExpanded: Bool
+    let isActive: Bool
+    let hasActiveDescendant: Bool
+
+    var id: String {
+        heading.id
+    }
+
+    var title: String {
+        heading.title
+    }
+
+    var level: Int {
+        heading.level
+    }
+
+    var hasChildren: Bool {
+        heading.hasChildren
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var renderedDocument: RenderedDocument?
     @Published private(set) var currentFileURL: URL?
+    @Published private(set) var outlineRows: [OutlineRowItem] = []
     @Published private(set) var recentFiles: [RecentFileItem] = []
     @Published private(set) var isLoading = false
     @Published private(set) var loadErrorMessage: String?
@@ -43,6 +68,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var searchResultCount = 0
     @Published private(set) var currentSearchResult = 0
     @Published private(set) var scrollProgress = 0.0
+    @Published private(set) var activeHeadingID: String?
     @Published var searchNavigationRequest: SearchNavigationRequest?
     @Published var anchorNavigationRequest: AnchorNavigationRequest?
     @Published private(set) var searchFocusToken = UUID()
@@ -63,11 +89,21 @@ final class AppModel: ObservableObject {
         renderedDocument != nil
     }
 
+    var hasOutline: Bool {
+        !outlineRows.isEmpty
+    }
+
+    var hasExpandableOutlineItems: Bool {
+        renderedDocument?.tableOfContents.contains { $0.hasChildren } == true
+    }
+
     private let renderer = MarkdownRenderer()
     private let recentStore = RecentFilesStore()
     private let watcher = FileWatcher()
     private var loadTask: Task<Void, Never>?
     private var pendingBootstrap = false
+    private var outlineExpandedIDsByDocument: [String: Set<String>] = [:]
+    private var outlineParentByID: [String: String] = [:]
 
     func bootstrapIfNeeded() {
         guard !pendingBootstrap else { return }
@@ -91,7 +127,33 @@ final class AppModel: ObservableObject {
     }
 
     func jumpToHeading(_ heading: TableOfContentsItem) {
+        expandAncestors(of: heading.id)
+        activeHeadingID = heading.id
+        refreshOutlineRows()
         anchorNavigationRequest = AnchorNavigationRequest(anchor: heading.id)
+    }
+
+    func toggleOutlineExpansion(for heading: TableOfContentsItem) {
+        guard heading.hasChildren else { return }
+        var expandedIDs = currentOutlineExpandedIDs()
+        if expandedIDs.contains(heading.id) {
+            expandedIDs.remove(heading.id)
+        } else {
+            expandedIDs.insert(heading.id)
+        }
+        persistOutlineExpandedIDs(expandedIDs)
+        refreshOutlineRows()
+    }
+
+    func expandAllOutlineItems() {
+        guard let renderedDocument else { return }
+        persistOutlineExpandedIDs(Self.expandableOutlineIDs(in: renderedDocument.tableOfContents))
+        refreshOutlineRows()
+    }
+
+    func collapseAllOutlineItems() {
+        persistOutlineExpandedIDs(Set<String>())
+        refreshOutlineRows()
     }
 
     func updateSearchResults(count: Int, currentIndex: Int) {
@@ -101,6 +163,12 @@ final class AppModel: ObservableObject {
 
     func updateScrollProgress(_ progress: Double) {
         scrollProgress = min(max(progress, 0), 1)
+    }
+
+    func updateActiveHeading(_ headingID: String?) {
+        activeHeadingID = headingID
+        expandAncestors(of: headingID)
+        refreshOutlineRows()
     }
 
     func openPanel() {
@@ -213,6 +281,7 @@ final class AppModel: ObservableObject {
 
                 guard !Task.isCancelled else { return }
                 self.renderedDocument = rendered
+                self.configureOutlineState(for: rendered, documentURL: standardized)
                 self.isLoading = false
             } catch {
                 guard !Task.isCancelled else { return }
@@ -254,6 +323,139 @@ final class AppModel: ObservableObject {
                 isAvailable: isAvailable
             )
         }
+    }
+
+    private func configureOutlineState(for renderedDocument: RenderedDocument, documentURL: URL) {
+        outlineParentByID = Self.outlineParentLookup(for: renderedDocument.tableOfContents)
+
+        let documentKey = Self.documentKey(for: documentURL)
+        let defaultExpandedIDs = Self.defaultExpandedOutlineIDs(in: renderedDocument.tableOfContents)
+        let sanitizedExpandedIDs = outlineExpandedIDsByDocument[documentKey, default: defaultExpandedIDs]
+            .intersection(Self.expandableOutlineIDs(in: renderedDocument.tableOfContents))
+
+        outlineExpandedIDsByDocument[documentKey] = sanitizedExpandedIDs
+        activeHeadingID = renderedDocument.tableOfContents.first?.id
+        expandAncestors(of: activeHeadingID)
+        refreshOutlineRows()
+    }
+
+    private func refreshOutlineRows() {
+        guard let renderedDocument else {
+            outlineRows = []
+            outlineParentByID = [:]
+            return
+        }
+
+        let activePath = Set(ancestorIDs(for: activeHeadingID) + (activeHeadingID.map { [$0] } ?? []))
+        outlineRows = Self.makeOutlineRows(
+            from: renderedDocument.tableOfContents,
+            expandedIDs: currentOutlineExpandedIDs(),
+            activeHeadingID: activeHeadingID,
+            activePath: activePath
+        )
+    }
+
+    private func currentOutlineExpandedIDs() -> Set<String> {
+        guard let currentFileURL else { return [] }
+        return outlineExpandedIDsByDocument[Self.documentKey(for: currentFileURL), default: []]
+    }
+
+    private func persistOutlineExpandedIDs(_ expandedIDs: Set<String>) {
+        guard let currentFileURL else { return }
+        let documentKey = Self.documentKey(for: currentFileURL)
+        outlineExpandedIDsByDocument[documentKey] = expandedIDs
+    }
+
+    private func expandAncestors(of headingID: String?) {
+        guard let headingID else { return }
+
+        let ancestorIDs = ancestorIDs(for: headingID)
+        guard !ancestorIDs.isEmpty else { return }
+
+        var expandedIDs = currentOutlineExpandedIDs()
+        let previousCount = expandedIDs.count
+        expandedIDs.formUnion(ancestorIDs)
+        guard expandedIDs.count != previousCount else { return }
+        persistOutlineExpandedIDs(expandedIDs)
+    }
+
+    private func ancestorIDs(for headingID: String?) -> [String] {
+        guard let headingID else { return [] }
+
+        var ancestors: [String] = []
+        var cursor = outlineParentByID[headingID]
+
+        while let parentID = cursor {
+            ancestors.append(parentID)
+            cursor = outlineParentByID[parentID]
+        }
+
+        return ancestors
+    }
+
+    private static func makeOutlineRows(
+        from headings: [TableOfContentsItem],
+        expandedIDs: Set<String>,
+        activeHeadingID: String?,
+        activePath: Set<String>,
+        depth: Int = 0
+    ) -> [OutlineRowItem] {
+        headings.flatMap { heading -> [OutlineRowItem] in
+            let isExpanded = heading.hasChildren && expandedIDs.contains(heading.id)
+            let row = OutlineRowItem(
+                heading: heading,
+                depth: depth,
+                isExpanded: isExpanded,
+                isActive: heading.id == activeHeadingID,
+                hasActiveDescendant: heading.id != activeHeadingID && activePath.contains(heading.id)
+            )
+
+            guard heading.hasChildren, isExpanded else {
+                return [row]
+            }
+
+            return [row] + makeOutlineRows(
+                from: heading.children,
+                expandedIDs: expandedIDs,
+                activeHeadingID: activeHeadingID,
+                activePath: activePath,
+                depth: depth + 1
+            )
+        }
+    }
+
+    private static func outlineParentLookup(for headings: [TableOfContentsItem]) -> [String: String] {
+        var lookup: [String: String] = [:]
+
+        func walk(_ items: [TableOfContentsItem], parentID: String?) {
+            for item in items {
+                if let parentID {
+                    lookup[item.id] = parentID
+                }
+                walk(item.children, parentID: item.id)
+            }
+        }
+
+        walk(headings, parentID: nil)
+        return lookup
+    }
+
+    private static func expandableOutlineIDs(in headings: [TableOfContentsItem]) -> Set<String> {
+        Set(headings.flatMap { heading -> [String] in
+            let ownID = heading.hasChildren ? [heading.id] : []
+            return ownID + Array(expandableOutlineIDs(in: heading.children))
+        })
+    }
+
+    private static func defaultExpandedOutlineIDs(in headings: [TableOfContentsItem]) -> Set<String> {
+        Set(headings.flatMap { heading -> [String] in
+            let ownID = heading.hasChildren && heading.level <= 2 ? [heading.id] : []
+            return ownID + Array(defaultExpandedOutlineIDs(in: heading.children))
+        })
+    }
+
+    private static func documentKey(for url: URL) -> String {
+        url.standardizedFileURL.path
     }
 
     private func openLaunchArgumentIfPresent() {

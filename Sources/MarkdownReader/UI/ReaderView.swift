@@ -17,6 +17,7 @@ struct ReaderView: View {
                 anchorNavigationRequest: model.anchorNavigationRequest,
                 onSearchUpdate: model.updateSearchResults(count:currentIndex:),
                 onProgressUpdate: model.updateScrollProgress(_:),
+                onActiveHeadingUpdate: model.updateActiveHeading(_:),
                 onOpenMarkdownLink: { url in
                     Task { @MainActor in
                         model.open(url: url)

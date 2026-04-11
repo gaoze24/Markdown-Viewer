@@ -14,7 +14,7 @@ private struct Parser {
     private let lines: [String]
     private let footnoteDefinitions: [String: String]
     private var slugifier = Slugifier()
-    private var headings: [TableOfContentsItem] = []
+    private var flatHeadings: [TableOfContentsItem] = []
     private var footnoteOrder: [String] = []
     private var footnoteNumbers: [String: Int] = [:]
 
@@ -33,11 +33,11 @@ private struct Parser {
     mutating func render() -> RenderedDocument {
         let body = renderBlocks(lines)
         let footnotes = renderFootnotes()
-        let title = headings.first?.title ?? sourceURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        let title = flatHeadings.first?.title ?? sourceURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
         return RenderedDocument(
             title: title,
             bodyHTML: body + footnotes,
-            tableOfContents: headings
+            tableOfContents: Self.buildHeadingTree(from: flatHeadings)
         )
     }
 
@@ -201,7 +201,7 @@ private struct Parser {
     private mutating func headingHTML(text: String, level: Int) -> String {
         let plainText = text.removingMarkdownArtifacts()
         let id = slugifier.slug(for: plainText)
-        headings.append(TableOfContentsItem(id: id, level: level, title: plainText))
+        flatHeadings.append(TableOfContentsItem(id: id, level: level, title: plainText))
         let html = renderInline(text)
         return """
         <h\(level) id="\(id)" class="heading-level-\(level)">
@@ -209,6 +209,51 @@ private struct Parser {
             <span>\(html)</span>
         </h\(level)>
         """
+    }
+
+    private static func buildHeadingTree(from headings: [TableOfContentsItem]) -> [TableOfContentsItem] {
+        final class Node {
+            let id: String
+            let level: Int
+            let title: String
+            var children: [Node] = []
+
+            init(item: TableOfContentsItem) {
+                self.id = item.id
+                self.level = item.level
+                self.title = item.title
+            }
+
+            func asItem() -> TableOfContentsItem {
+                TableOfContentsItem(
+                    id: id,
+                    level: level,
+                    title: title,
+                    children: children.map { $0.asItem() }
+                )
+            }
+        }
+
+        var roots: [Node] = []
+        var stack: [Node] = []
+
+        for heading in headings {
+            let node = Node(item: heading)
+
+            while let last = stack.last, last.level >= node.level {
+                stack.removeLast()
+            }
+
+            if let parent = stack.last {
+                parent.children.append(node)
+            } else {
+                roots.append(node)
+            }
+
+            stack.append(node)
+        }
+
+        return roots.map { $0.asItem() }
     }
 
     private func parseHorizontalRule(from input: [String], index: inout Int) -> String? {

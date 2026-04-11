@@ -16,6 +16,7 @@ struct MarkdownWebView: NSViewRepresentable {
     let anchorNavigationRequest: AnchorNavigationRequest?
     let onSearchUpdate: (Int, Int) -> Void
     let onProgressUpdate: (Double) -> Void
+    let onActiveHeadingUpdate: (String?) -> Void
     let onOpenMarkdownLink: (URL) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -26,6 +27,7 @@ struct MarkdownWebView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.add(context.coordinator, name: Coordinator.progressHandlerName)
+        configuration.userContentController.add(context.coordinator, name: Coordinator.activeHeadingHandlerName)
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
@@ -57,6 +59,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         static let progressHandlerName = "readerProgress"
+        static let activeHeadingHandlerName = "readerActiveHeading"
 
         var parent: MarkdownWebView
         private var lastHTML = ""
@@ -170,8 +173,14 @@ struct MarkdownWebView: NSViewRepresentable {
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == Self.progressHandlerName, let value = message.body as? Double else { return }
-            parent.onProgressUpdate(value)
+            if message.name == Self.progressHandlerName, let value = message.body as? Double {
+                parent.onProgressUpdate(value)
+                return
+            }
+
+            if message.name == Self.activeHeadingHandlerName {
+                parent.onActiveHeadingUpdate(message.body as? String)
+            }
         }
 
         private static func int(from result: Any?, key: String) -> Int {

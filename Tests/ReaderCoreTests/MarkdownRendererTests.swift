@@ -17,10 +17,42 @@ final class MarkdownRendererTests: XCTestCase {
         let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
 
         XCTAssertEqual(document.title, "Calm Reader")
-        XCTAssertEqual(document.tableOfContents.map(\.title), ["Calm Reader", "Details"])
+        XCTAssertEqual(flattenedTitles(in: document.tableOfContents), ["Calm Reader", "Details"])
         XCTAssertTrue(document.bodyHTML.contains("<strong>bold</strong>"))
         XCTAssertTrue(document.bodyHTML.contains("<em>italic</em>"))
         XCTAssertTrue(document.bodyHTML.contains("<a href=\"https://example.com\">link</a>"))
+    }
+
+    func testRendererBuildsHierarchicalTableOfContents() {
+        let markdown = """
+        # Intro
+        ## Context
+        ### Details
+        ## Summary
+        # Appendix
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertEqual(document.tableOfContents.map(\.title), ["Intro", "Appendix"])
+        XCTAssertEqual(document.tableOfContents[0].children.map(\.title), ["Context", "Summary"])
+        XCTAssertEqual(document.tableOfContents[0].children[0].children.map(\.title), ["Details"])
+    }
+
+    func testRendererAssignsSkippedHeadingLevelsToNearestValidAncestor() {
+        let markdown = """
+        # Parent
+        ### Grandchild
+        #### Great Grandchild
+        ## Sibling
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+        let root = document.tableOfContents[0]
+
+        XCTAssertEqual(root.title, "Parent")
+        XCTAssertEqual(root.children.map(\.title), ["Grandchild", "Sibling"])
+        XCTAssertEqual(root.children[0].children.map(\.title), ["Great Grandchild"])
     }
 
     func testRendererSupportsTablesTasksAndFootnotes() {
@@ -125,9 +157,13 @@ final class MarkdownRendererTests: XCTestCase {
         let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
 
         XCTAssertEqual(
-            document.tableOfContents.map(\.title),
+            flattenedTitles(in: document.tableOfContents),
             ["5. How the new measure is built when the numeraire is N(t)"]
         )
         XCTAssertFalse(document.tableOfContents[0].title.contains("$"))
+    }
+
+    private func flattenedTitles(in items: [TableOfContentsItem]) -> [String] {
+        items.flatMap { $0.flattened().map(\.title) }
     }
 }
