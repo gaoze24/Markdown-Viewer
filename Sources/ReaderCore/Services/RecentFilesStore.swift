@@ -48,6 +48,12 @@ public final class RecentFilesStore: @unchecked Sendable {
         return documents
     }
 
+    @discardableResult
+    public func clear() -> [RecentDocument] {
+        userDefaults.removeObject(forKey: storageKey)
+        return []
+    }
+
     public func resolveURL(for document: RecentDocument) -> URL? {
         if let bookmarkData = document.bookmarkData {
             var stale = false

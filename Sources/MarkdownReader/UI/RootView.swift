@@ -35,6 +35,12 @@ struct RootView: View {
                         errorMessage: model.loadErrorMessage,
                         openAction: model.openPanel,
                         openRecentAction: model.openRecent(_:),
+                        removeRecentAction: { item in
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                model.removeRecent(item)
+                            }
+                        },
+                        clearRecentFilesAction: model.confirmAndClearRecentFiles,
                         isDropTargeted: isDropTargeted
                     )
                 }

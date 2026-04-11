@@ -16,6 +16,7 @@ struct SidebarView: View {
             .scrollContentBackground(.hidden)
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 240, ideal: 280)
+            .animation(.easeInOut(duration: 0.18), value: model.recentFiles.map(\.id))
         }
     }
 
@@ -57,25 +58,15 @@ struct SidebarView: View {
                     .foregroundStyle(AppTheme.secondaryText)
             } else {
                 ForEach(model.recentFiles) { item in
-                    Button {
-                        model.openRecent(item)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                recentFileIcon(isAvailable: item.isAvailable)
-                                Text(item.name)
-                                    .lineLimit(1)
-                                    .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
+                    SidebarRecentFileRow(
+                        item: item,
+                        openAction: { model.openRecent(item) },
+                        removeAction: {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                model.removeRecent(item)
                             }
-                            Text(item.path)
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .lineLimit(2)
                         }
-                        .padding(.vertical, 2)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!item.isAvailable)
+                    )
                 }
             }
         }
@@ -83,6 +74,51 @@ struct SidebarView: View {
 
     private var renderedDocument: RenderedDocument? {
         model.renderedDocument
+    }
+
+    private func accent(for level: Int) -> Color {
+        AppTheme.outlineAccent(for: level)
+    }
+}
+
+private struct SidebarRecentFileRow: View {
+    let item: RecentFileItem
+    let openAction: () -> Void
+    let removeAction: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: openAction) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        recentFileIcon(isAvailable: item.isAvailable)
+                        Text(item.name)
+                            .lineLimit(1)
+                            .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
+                    }
+
+                    Text(item.path)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+            .disabled(!item.isAvailable)
+
+            RecentFileRemoveButton(isVisible: isHovered, action: removeAction)
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            recentFileContextMenu(for: item, openAction: openAction, removeAction: removeAction)
+        }
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 
     @ViewBuilder
@@ -94,9 +130,5 @@ struct SidebarView: View {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(AppTheme.warning)
         }
-    }
-
-    private func accent(for level: Int) -> Color {
-        AppTheme.outlineAccent(for: level)
     }
 }

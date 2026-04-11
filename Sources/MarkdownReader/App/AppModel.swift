@@ -156,6 +156,31 @@ final class AppModel: ObservableObject {
         open(url: currentFileURL, addToRecentFiles: false)
     }
 
+    func removeRecent(_ item: RecentFileItem) {
+        recentStore.remove(documentID: item.id)
+        refreshRecentFiles()
+    }
+
+    func clearRecentFiles() {
+        recentStore.clear()
+        refreshRecentFiles()
+    }
+
+    func confirmAndClearRecentFiles() {
+        guard !recentFiles.isEmpty else { return }
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Clear Recent Files?"
+        alert.informativeText = "This only clears the recent files history. Files on disk will not be deleted, moved to Trash, or modified."
+        alert.addButton(withTitle: "Clear Recent Files")
+        alert.addButton(withTitle: "Cancel")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            clearRecentFiles()
+        }
+    }
+
     func open(url: URL, addToRecentFiles: Bool = true) {
         let standardized = url.standardizedFileURL
         guard Self.isSupportedMarkdownURL(standardized) else {

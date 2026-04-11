@@ -68,6 +68,12 @@ struct MarkdownReaderApp: App {
                         }
                         .disabled(!item.isAvailable)
                     }
+
+                    Divider()
+
+                    Button("Clear Recent Files…") {
+                        model.confirmAndClearRecentFiles()
+                    }
                 }
             }
         }

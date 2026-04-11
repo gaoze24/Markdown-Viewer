@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct WelcomeView: View {
@@ -6,6 +5,8 @@ struct WelcomeView: View {
     let errorMessage: String?
     let openAction: () -> Void
     let openRecentAction: (RecentFileItem) -> Void
+    let removeRecentAction: (RecentFileItem) -> Void
+    let clearRecentFilesAction: () -> Void
     let isDropTargeted: Bool
 
     private var continueReadingItem: RecentFileItem? {
@@ -74,11 +75,19 @@ struct WelcomeView: View {
 
             Spacer()
 
-            Button(action: openAction) {
-                Label("Open File", systemImage: "folder.badge.plus")
+            HStack(spacing: 10) {
+                if !recentFiles.isEmpty {
+                    Button("Clear Recent Files…", action: clearRecentFilesAction)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
+                Button(action: openAction) {
+                    Label("Open File", systemImage: "folder.badge.plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
         }
         .padding(.bottom, 4)
     }
@@ -91,7 +100,8 @@ struct WelcomeView: View {
                 item: item,
                 eyebrow: "Most recent",
                 emphasis: .featured,
-                openAction: { openRecentAction(item) }
+                openAction: { openRecentAction(item) },
+                removeAction: { removeRecentAction(item) }
             )
         }
     }
@@ -108,7 +118,8 @@ struct WelcomeView: View {
                     ForEach(displayedRecentFiles) { item in
                         LibraryListRow(
                             item: item,
-                            openAction: { openRecentAction(item) }
+                            openAction: { openRecentAction(item) },
+                            removeAction: { removeRecentAction(item) }
                         )
 
                         if item.id != displayedRecentFiles.last?.id {
@@ -125,6 +136,7 @@ struct WelcomeView: View {
                 )
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: recentFiles.map(\.id))
     }
 
     private var emptyLibrarySection: some View {
@@ -222,59 +234,66 @@ private struct LibraryFeatureRow: View {
     let eyebrow: String
     let emphasis: Emphasis
     let openAction: () -> Void
+    let removeAction: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: openAction) {
-            HStack(spacing: 16) {
-                rowIcon
+        HStack(spacing: 12) {
+            Button(action: openAction) {
+                HStack(spacing: 16) {
+                    rowIcon
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(eyebrow)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppTheme.tertiaryText)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(eyebrow)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.tertiaryText)
 
-                    Text(item.name)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
-                        .lineLimit(1)
+                        Text(item.name)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
+                            .lineLimit(1)
 
-                    Text(item.path)
-                        .font(.subheadline)
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .lineLimit(2)
+                        Text(item.path)
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 20)
+
+                    HStack(spacing: 10) {
+                        availabilityBadge
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .opacity(isHovered && item.isAvailable ? 1 : 0.45)
+                            .offset(x: isHovered && item.isAvailable ? 2 : 0)
+                    }
                 }
-
-                Spacer(minLength: 20)
-
-                VStack(alignment: .trailing, spacing: 10) {
-                    availabilityBadge
-
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .opacity(isHovered && item.isAvailable ? 1 : 0.45)
-                        .offset(x: isHovered && item.isAvailable ? 2 : 0)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(borderColor, lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            .disabled(!item.isAvailable)
+
+            RecentFileRemoveButton(isVisible: isHovered, action: removeAction)
         }
-        .buttonStyle(.plain)
-        .disabled(!item.isAvailable)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.14)) {
                 isHovered = hovering
             }
         }
         .contextMenu {
-            documentContextMenu(for: item, openAction: openAction)
+            recentFileContextMenu(for: item, openAction: openAction, removeAction: removeAction)
         }
     }
 
@@ -325,51 +344,58 @@ private struct LibraryFeatureRow: View {
 private struct LibraryListRow: View {
     let item: RecentFileItem
     let openAction: () -> Void
+    let removeAction: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: openAction) {
-            HStack(spacing: 14) {
-                icon
+        HStack(spacing: 10) {
+            Button(action: openAction) {
+                HStack(spacing: 14) {
+                    icon
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.name)
-                        .font(.headline)
-                        .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
-                        .lineLimit(1)
-                    Text(item.path)
-                        .font(.subheadline)
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.name)
+                            .font(.headline)
+                            .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
+                            .lineLimit(1)
+                        Text(item.path)
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    if item.isAvailable {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.tertiaryText)
+                            .opacity(isHovered ? 1 : 0.55)
+                    } else {
+                        Text("Missing")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(AppTheme.warning)
+                    }
                 }
-
-                Spacer(minLength: 12)
-
-                if item.isAvailable {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.tertiaryText)
-                        .opacity(isHovered ? 1 : 0.55)
-                } else {
-                    Text("Missing")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(AppTheme.warning)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(isHovered && item.isAvailable ? AppTheme.subtleAccentFill : .clear)
+            .buttonStyle(.plain)
+            .disabled(!item.isAvailable)
+
+            RecentFileRemoveButton(isVisible: isHovered, action: removeAction)
         }
-        .buttonStyle(.plain)
-        .disabled(!item.isAvailable)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(isHovered && item.isAvailable ? AppTheme.subtleAccentFill : .clear)
+        .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) {
                 isHovered = hovering
             }
         }
         .contextMenu {
-            documentContextMenu(for: item, openAction: openAction)
+            recentFileContextMenu(for: item, openAction: openAction, removeAction: removeAction)
         }
     }
 
@@ -383,26 +409,6 @@ private struct LibraryListRow: View {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(AppTheme.warning)
                 .frame(width: 22)
-        }
-    }
-}
-
-@MainActor
-@ViewBuilder
-private func documentContextMenu(for item: RecentFileItem, openAction: @escaping () -> Void) -> some View {
-    Button("Open") {
-        openAction()
-    }
-    .disabled(!item.isAvailable)
-
-    if item.isAvailable {
-        Button("Reveal in Finder") {
-            NSWorkspace.shared.activateFileViewerSelecting([item.url])
-        }
-
-        Button("Copy Path") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(item.path, forType: .string)
         }
     }
 }
