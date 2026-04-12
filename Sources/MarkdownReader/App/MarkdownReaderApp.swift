@@ -21,6 +21,7 @@ struct MarkdownReaderApp: App {
                     model.bootstrapIfNeeded()
                 }
         }
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .windowResizability(.contentSize)
         .defaultSize(width: 1340, height: 860)
         .commands {

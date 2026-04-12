@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 import WebKit
 
@@ -67,7 +68,13 @@ struct MarkdownWebView: NSViewRepresentable {
         private var lastSearchNavigationID: UUID?
         private var lastAnchorNavigationID: UUID?
         private var lastDisplaySettings: ReaderDisplaySettings?
+        private var lastPostedProgress: Double = -1
+        private var lastProgressPostTime = CACurrentMediaTime()
+        private var lastPostedHeadingID: String?
         private var isLoaded = false
+
+        private static let minimumProgressDelta = 0.003
+        private static let minimumProgressInterval: CFTimeInterval = 1.0 / 20.0
 
         init(parent: MarkdownWebView) {
             self.parent = parent
@@ -78,6 +85,9 @@ struct MarkdownWebView: NSViewRepresentable {
             guard html != lastHTML else { return }
             lastHTML = html
             isLoaded = false
+            lastPostedProgress = -1
+            lastPostedHeadingID = nil
+            lastProgressPostTime = CACurrentMediaTime()
             webView.loadHTMLString(html, baseURL: parent.baseURL)
         }
 
@@ -174,12 +184,26 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == Self.progressHandlerName, let value = message.body as? Double {
-                parent.onProgressUpdate(value)
+                let clampedProgress = min(max(value, 0), 1)
+                let now = CACurrentMediaTime()
+                let progressChanged = abs(clampedProgress - lastPostedProgress) >= Self.minimumProgressDelta
+                let timeElapsed = now - lastProgressPostTime >= Self.minimumProgressInterval
+
+                guard lastPostedProgress < 0 || progressChanged || timeElapsed || clampedProgress == 0 || clampedProgress == 1 else {
+                    return
+                }
+
+                lastPostedProgress = clampedProgress
+                lastProgressPostTime = now
+                parent.onProgressUpdate(clampedProgress)
                 return
             }
 
             if message.name == Self.activeHeadingHandlerName {
-                parent.onActiveHeadingUpdate(message.body as? String)
+                let headingID = message.body as? String
+                guard headingID != lastPostedHeadingID else { return }
+                lastPostedHeadingID = headingID
+                parent.onActiveHeadingUpdate(headingID)
             }
         }
 

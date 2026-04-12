@@ -199,7 +199,7 @@ private struct Parser {
     }
 
     private mutating func headingHTML(text: String, level: Int) -> String {
-        let plainText = text.removingMarkdownArtifacts()
+        let plainText = text.removingMarkdownArtifacts().htmlUnescaped()
         let id = slugifier.slug(for: plainText)
         flatHeadings.append(TableOfContentsItem(id: id, level: level, title: plainText))
         let html = renderInline(text)
@@ -258,7 +258,7 @@ private struct Parser {
 
     private func parseHorizontalRule(from input: [String], index: inout Int) -> String? {
         let trimmed = input[index].trimmingCharacters(in: .whitespaces)
-        guard trimmed.range(of: #"^((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$"#, options: .regularExpression) != nil else {
+        guard matchesRegex(RegexPatterns.horizontalRule, in: trimmed) else {
             return nil
         }
         index += 1
@@ -477,6 +477,14 @@ private struct Parser {
     }
 
     private mutating func renderInline(_ text: String) -> String {
+        if text.isEmpty {
+            return ""
+        }
+
+        if !containsInlineMarkup(in: text) {
+            return text.htmlUnescaped().htmlEscaped()
+        }
+
         let codeSpans = PlaceholderStore()
         let mathSpans = PlaceholderStore()
         let media = PlaceholderStore()
@@ -485,7 +493,7 @@ private struct Parser {
         var source = html
         html = replaceMatches(
             in: html,
-            pattern: #"`([^`]+)`"#,
+            pattern: RegexPatterns.inlineCode,
             options: []
         ) { match in
             let value = capture(match, in: source, group: 1).htmlEscaped()
@@ -495,7 +503,7 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"\\\(((?:\\.|[^\\])+?)\\\)"#
+            pattern: RegexPatterns.inlineMathParen
         ) { match in
             mathSpans.store(mathPlaceholderHTML(
                 source: capture(match, in: source, group: 1),
@@ -506,7 +514,7 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"(?<!\\)\$(?![\s$])((?:\\.|[^$\\])+?)(?<!\\)\$"#
+            pattern: RegexPatterns.inlineMathDollar
         ) { match in
             mathSpans.store(mathPlaceholderHTML(
                 source: capture(match, in: source, group: 1),
@@ -517,11 +525,11 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"\!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)"#
+            pattern: RegexPatterns.image
         ) { match in
-            let altText = capture(match, in: source, group: 1)
-            let url = capture(match, in: source, group: 2)
-            let title = capture(match, in: source, group: 3)
+            let altText = capture(match, in: source, group: 1).htmlUnescaped()
+            let url = capture(match, in: source, group: 2).htmlUnescaped()
+            let title = capture(match, in: source, group: 3).htmlUnescaped()
             let titleAttribute = !title.isEmpty
                 ? " title=\"\(title.htmlEscaped())\""
                 : ""
@@ -536,22 +544,23 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)"#
+            pattern: RegexPatterns.link
         ) { match in
-            let title = capture(match, in: source, group: 3)
+            let title = capture(match, in: source, group: 3).htmlUnescaped()
             let titleAttribute = !title.isEmpty
                 ? " title=\"\(title.htmlEscaped())\""
                 : ""
             let label = renderInline(capture(match, in: source, group: 1))
-            let destination = capture(match, in: source, group: 2)
+            let destination = capture(match, in: source, group: 2).htmlUnescaped()
             return media.store("<a href=\"\(destination.htmlEscaped())\"\(titleAttribute)>\(label)</a>")
         }
 
-        html = html.htmlEscaped()
+        // Decode known entities in prose first, then escape once for HTML output.
+        html = html.htmlUnescaped().htmlEscaped()
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"\[\^([^\]]+)\]"#
+            pattern: RegexPatterns.inlineFootnote
         ) { match in
             let key = capture(match, in: source, group: 1)
             guard footnoteDefinitions[key] != nil else { return "" }
@@ -570,7 +579,7 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"(\*\*|__)(.+?)\1"#
+            pattern: RegexPatterns.strong
         ) { match in
             "<strong>\(renderInline(capture(match, in: source, group: 2)))</strong>"
         }
@@ -578,7 +587,7 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)"#
+            pattern: RegexPatterns.emphasisAsterisk
         ) { match in
             "<em>\(renderInline(capture(match, in: source, group: 1)))</em>"
         }
@@ -586,7 +595,7 @@ private struct Parser {
         source = html
         html = replaceMatches(
             in: html,
-            pattern: #"(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)"#
+            pattern: RegexPatterns.emphasisUnderscore
         ) { match in
             "<em>\(renderInline(capture(match, in: source, group: 1)))</em>"
         }
@@ -603,7 +612,7 @@ private struct Parser {
         options: NSRegularExpression.Options = [],
         transform: (NSTextCheckingResult) -> String
     ) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return input }
+        guard let regex = RegexCache.regex(for: pattern, options: options) else { return input }
 
         let matches = regex.matches(in: input, range: NSRange(input.startIndex..., in: input))
         guard !matches.isEmpty else { return input }
@@ -647,16 +656,17 @@ private struct Parser {
         if isTableDelimiter(nextLine ?? "") && line.contains("|") {
             return true
         }
-        if line.trimmingCharacters(in: .whitespaces).range(of: #"^(#{1,6})\s+"#, options: .regularExpression) != nil {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if matchesRegex(RegexPatterns.atxHeading, in: trimmed) {
             return true
         }
-        if line.trimmingCharacters(in: .whitespaces).range(of: #"^((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$"#, options: .regularExpression) != nil {
+        if matchesRegex(RegexPatterns.horizontalRule, in: trimmed) {
             return true
         }
-        if line.trimmingCharacters(in: .whitespaces).hasPrefix("<details") {
+        if trimmed.hasPrefix("<details") {
             return true
         }
-        if mathBlockDelimiter(for: line.trimmingCharacters(in: .whitespaces)) != nil {
+        if mathBlockDelimiter(for: trimmed) != nil {
             return true
         }
         return false
@@ -675,7 +685,7 @@ private struct Parser {
     }
 
     private func listMarker(for line: String) -> ListMarker? {
-        guard let regex = try? NSRegularExpression(pattern: #"^(\s*)([-+*]|\d+\.)\s+(.+)$"#) else { return nil }
+        guard let regex = RegexCache.regex(for: RegexPatterns.listMarker) else { return nil }
         let nsRange = NSRange(line.startIndex..., in: line)
         guard
             let match = regex.firstMatch(in: line, range: nsRange),
@@ -716,8 +726,7 @@ private struct Parser {
     }
 
     private func isTableDelimiter(_ line: String) -> Bool {
-        line.trimmingCharacters(in: .whitespaces)
-            .range(of: #"^\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$"#, options: .regularExpression) != nil
+        matchesRegex(RegexPatterns.tableDelimiter, in: line.trimmingCharacters(in: .whitespaces))
     }
 
     private func splitTableRow(_ line: String) -> [String] {
@@ -747,10 +756,11 @@ private struct Parser {
         var result: [String] = []
         var definitions: [String: String] = [:]
         var index = 0
+        let definitionRegex = RegexCache.regex(for: RegexPatterns.footnoteDefinition)
 
         while index < lines.count {
             let line = lines[index]
-            if let regex = try? NSRegularExpression(pattern: #"^\[\^([^\]]+)\]:\s*(.*)$"#),
+            if let regex = definitionRegex,
                let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
                let keyRange = Range(match.range(at: 1), in: line),
                let contentRange = Range(match.range(at: 2), in: line) {
@@ -780,6 +790,35 @@ private struct Parser {
 
         return (result, definitions)
     }
+
+    private func containsInlineMarkup(in text: String) -> Bool {
+        text.contains { Self.inlineTriggerCharacters.contains($0) }
+    }
+
+    private func matchesRegex(_ pattern: String, in text: String) -> Bool {
+        guard let regex = RegexCache.regex(for: pattern) else { return false }
+        return regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    private enum RegexPatterns {
+        static let atxHeading = #"^(#{1,6})\s+"#
+        static let horizontalRule = #"^((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$"#
+        static let tableDelimiter = #"^\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$"#
+        static let listMarker = #"^(\s*)([-+*]|\d+\.)\s+(.+)$"#
+        static let footnoteDefinition = #"^\[\^([^\]]+)\]:\s*(.*)$"#
+
+        static let inlineCode = #"`([^`]+)`"#
+        static let inlineMathParen = #"\\\(((?:\\.|[^\\])+?)\\\)"#
+        static let inlineMathDollar = #"(?<!\\)\$(?![\s$])((?:\\.|[^$\\])+?)(?<!\\)\$"#
+        static let image = #"\!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)"#
+        static let link = #"\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)"#
+        static let inlineFootnote = #"\[\^([^\]]+)\]"#
+        static let strong = #"(\*\*|__)(.+?)\1"#
+        static let emphasisAsterisk = #"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)"#
+        static let emphasisUnderscore = #"(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)"#
+    }
+
+    private static let inlineTriggerCharacters: Set<Character> = ["`", "\\", "$", "[", "!", "*", "_", "&"]
 }
 
 private final class PlaceholderStore {
@@ -795,6 +834,34 @@ private final class PlaceholderStore {
         values.enumerated().reduce(input) { partial, pair in
             partial.replacingOccurrences(of: "%%PLACEHOLDER\(pair.offset)%%", with: pair.element)
         }
+    }
+}
+
+private enum RegexCache {
+    private struct Key: Hashable {
+        let pattern: String
+        let optionsRawValue: UInt
+    }
+
+    nonisolated(unsafe) private static var cache: [Key: NSRegularExpression] = [:]
+    private static let lock = NSLock()
+
+    static func regex(for pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression? {
+        let key = Key(pattern: pattern, optionsRawValue: options.rawValue)
+
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let cached = cache[key] {
+            return cached
+        }
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else {
+            return nil
+        }
+
+        cache[key] = regex
+        return regex
     }
 }
 

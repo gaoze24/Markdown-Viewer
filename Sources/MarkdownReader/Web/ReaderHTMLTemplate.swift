@@ -400,38 +400,84 @@ enum ReaderHTMLTemplate {
                 \(mathAssets.katexScript)
             </script>
             <script>
+                const headingSelector = '#reader-root h1[id], #reader-root h2[id], #reader-root h3[id], #reader-root h4[id], #reader-root h5[id], #reader-root h6[id]';
+                const progressMinDelta = 0.003;
+                const progressMinIntervalMs = 50;
+
                 const readerState = {
                     matches: [],
                     currentMatchIndex: 0,
-                    activeHeadingId: null
+                    activeHeadingId: null,
+                    headings: [],
+                    headingOffsets: [],
+                    lastProgress: -1,
+                    lastProgressPostAt: 0,
+                    statePostScheduled: false
                 };
+
+                function refreshHeadingCache() {
+                    readerState.headings = Array.from(document.querySelectorAll(headingSelector));
+                    refreshHeadingOffsets();
+                }
+
+                function refreshHeadingOffsets() {
+                    readerState.headingOffsets = readerState.headings.map((heading) => heading.offsetTop);
+                }
+
+                function scheduleReaderStatePost() {
+                    if (readerState.statePostScheduled) {
+                        return;
+                    }
+
+                    readerState.statePostScheduled = true;
+                    requestAnimationFrame(() => {
+                        readerState.statePostScheduled = false;
+                        postReaderState();
+                    });
+                }
 
                 function postProgress() {
                     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
                     const progress = maxScroll <= 0 ? 0 : window.scrollY / maxScroll;
+                    const now = performance.now();
+                    const progressChanged = Math.abs(progress - readerState.lastProgress) >= progressMinDelta;
+                    const enoughTimeElapsed = (now - readerState.lastProgressPostAt) >= progressMinIntervalMs;
+
+                    if (readerState.lastProgress >= 0 && !progressChanged && !enoughTimeElapsed && progress !== 0 && progress !== 1) {
+                        return;
+                    }
+
+                    readerState.lastProgress = progress;
+                    readerState.lastProgressPostAt = now;
+
                     if (window.webkit?.messageHandlers?.readerProgress) {
                         window.webkit.messageHandlers.readerProgress.postMessage(progress);
                     }
                 }
 
                 function currentHeadingId() {
-                    const headings = Array.from(document.querySelectorAll('#reader-root h1[id], #reader-root h2[id], #reader-root h3[id], #reader-root h4[id], #reader-root h5[id], #reader-root h6[id]'));
+                    const headings = readerState.headings;
                     if (headings.length === 0) {
                         return null;
                     }
 
-                    const threshold = 120;
-                    let active = headings[0];
+                    const targetOffset = window.scrollY + 120;
+                    const offsets = readerState.headingOffsets;
+                    let lowerBound = 0;
+                    let upperBound = offsets.length - 1;
+                    let bestIndex = 0;
 
-                    for (const heading of headings) {
-                        if (heading.getBoundingClientRect().top <= threshold) {
-                            active = heading;
+                    while (lowerBound <= upperBound) {
+                        const midpoint = Math.floor((lowerBound + upperBound) / 2);
+                        if (offsets[midpoint] <= targetOffset) {
+                            bestIndex = midpoint;
+                            lowerBound = midpoint + 1;
                         } else {
-                            break;
+                            upperBound = midpoint - 1;
                         }
                     }
 
-                    return active?.id || null;
+                    return headings[bestIndex]?.id || null;
                 }
 
                 function postActiveHeading() {
@@ -454,6 +500,10 @@ enum ReaderHTMLTemplate {
                 function applyDisplaySettings(fontSize, width) {
                     document.documentElement.style.setProperty('--base-font-size', `${fontSize}px`);
                     document.documentElement.style.setProperty('--reader-width', `${width}px`);
+                    requestAnimationFrame(() => {
+                        refreshHeadingOffsets();
+                        scheduleReaderStatePost();
+                    });
                 }
 
                 function decodeMathSource(encoded) {
@@ -576,6 +626,7 @@ enum ReaderHTMLTemplate {
                     }
 
                     readerState.currentMatchIndex = readerState.matches.length > 0 ? 1 : 0;
+                    scheduleReaderStatePost();
                     return updateCurrentSearchResult();
                 }
 
@@ -608,9 +659,19 @@ enum ReaderHTMLTemplate {
 
                 window.addEventListener('load', () => {
                     renderMath();
+                    refreshHeadingCache();
                     postReaderState();
+
+                    requestAnimationFrame(() => {
+                        refreshHeadingOffsets();
+                        postReaderState();
+                    });
                 });
-                window.addEventListener('scroll', postReaderState, { passive: true });
+                window.addEventListener('scroll', scheduleReaderStatePost, { passive: true });
+                window.addEventListener('resize', () => {
+                    refreshHeadingOffsets();
+                    scheduleReaderStatePost();
+                }, { passive: true });
             </script>
         </body>
         </html>

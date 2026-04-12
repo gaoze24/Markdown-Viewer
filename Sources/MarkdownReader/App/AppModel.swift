@@ -78,7 +78,14 @@ final class AppModel: ObservableObject {
     }
 
     var subtitle: String? {
-        currentFileURL?.path(percentEncoded: false)
+        guard let currentFileURL else { return nil }
+
+        let directoryPath = currentFileURL
+            .deletingLastPathComponent()
+            .path(percentEncoded: false)
+
+        guard !directoryPath.isEmpty else { return nil }
+        return (directoryPath as NSString).abbreviatingWithTildeInPath
     }
 
     var documentBaseURL: URL? {
@@ -100,6 +107,7 @@ final class AppModel: ObservableObject {
     private let renderer = MarkdownRenderer()
     private let recentStore = RecentFilesStore()
     private let watcher = FileWatcher()
+    private let scrollProgressDeltaThreshold = 0.0025
     private var loadTask: Task<Void, Never>?
     private var pendingBootstrap = false
     private var outlineExpandedIDsByDocument: [String: Set<String>] = [:]
@@ -127,9 +135,13 @@ final class AppModel: ObservableObject {
     }
 
     func jumpToHeading(_ heading: TableOfContentsItem) {
-        expandAncestors(of: heading.id)
         activeHeadingID = heading.id
-        refreshOutlineRows()
+        let didExpandAncestors = expandAncestors(of: heading.id)
+        if didExpandAncestors {
+            refreshOutlineRows()
+        } else {
+            refreshOutlineHighlightState()
+        }
         anchorNavigationRequest = AnchorNavigationRequest(anchor: heading.id)
     }
 
@@ -162,13 +174,26 @@ final class AppModel: ObservableObject {
     }
 
     func updateScrollProgress(_ progress: Double) {
-        scrollProgress = min(max(progress, 0), 1)
+        let clampedProgress = min(max(progress, 0), 1)
+        if abs(clampedProgress - scrollProgress) < scrollProgressDeltaThreshold,
+           clampedProgress != 0,
+           clampedProgress != 1 {
+            return
+        }
+
+        scrollProgress = clampedProgress
     }
 
     func updateActiveHeading(_ headingID: String?) {
+        guard headingID != activeHeadingID else { return }
         activeHeadingID = headingID
-        expandAncestors(of: headingID)
-        refreshOutlineRows()
+        let didExpandAncestors = expandAncestors(of: headingID)
+
+        if didExpandAncestors {
+            refreshOutlineRows()
+        } else {
+            refreshOutlineHighlightState()
+        }
     }
 
     func openPanel() {
@@ -355,6 +380,38 @@ final class AppModel: ObservableObject {
         )
     }
 
+    private func refreshOutlineHighlightState() {
+        guard !outlineRows.isEmpty else {
+            refreshOutlineRows()
+            return
+        }
+
+        let activePath = Set(ancestorIDs(for: activeHeadingID) + (activeHeadingID.map { [$0] } ?? []))
+        var hasChanges = false
+
+        let updatedRows = outlineRows.map { row in
+            let isActive = row.heading.id == activeHeadingID
+            let hasActiveDescendant = row.heading.id != activeHeadingID && activePath.contains(row.heading.id)
+
+            if isActive == row.isActive, hasActiveDescendant == row.hasActiveDescendant {
+                return row
+            }
+
+            hasChanges = true
+            return OutlineRowItem(
+                heading: row.heading,
+                depth: row.depth,
+                isExpanded: row.isExpanded,
+                isActive: isActive,
+                hasActiveDescendant: hasActiveDescendant
+            )
+        }
+
+        if hasChanges {
+            outlineRows = updatedRows
+        }
+    }
+
     private func currentOutlineExpandedIDs() -> Set<String> {
         guard let currentFileURL else { return [] }
         return outlineExpandedIDsByDocument[Self.documentKey(for: currentFileURL), default: []]
@@ -366,17 +423,19 @@ final class AppModel: ObservableObject {
         outlineExpandedIDsByDocument[documentKey] = expandedIDs
     }
 
-    private func expandAncestors(of headingID: String?) {
-        guard let headingID else { return }
+    @discardableResult
+    private func expandAncestors(of headingID: String?) -> Bool {
+        guard let headingID else { return false }
 
         let ancestorIDs = ancestorIDs(for: headingID)
-        guard !ancestorIDs.isEmpty else { return }
+        guard !ancestorIDs.isEmpty else { return false }
 
         var expandedIDs = currentOutlineExpandedIDs()
         let previousCount = expandedIDs.count
         expandedIDs.formUnion(ancestorIDs)
-        guard expandedIDs.count != previousCount else { return }
+        guard expandedIDs.count != previousCount else { return false }
         persistOutlineExpandedIDs(expandedIDs)
+        return true
     }
 
     private func ancestorIDs(for headingID: String?) -> [String] {

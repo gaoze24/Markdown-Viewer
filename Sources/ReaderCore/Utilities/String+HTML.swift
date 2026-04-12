@@ -2,20 +2,22 @@ import Foundation
 
 extension String {
     func htmlEscaped() -> String {
-        var value = self
-        let replacements = [
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            "\"": "&quot;",
-            "'": "&#39;"
-        ]
+        self
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
 
-        for (character, entity) in replacements {
-            value = value.replacingOccurrences(of: character, with: entity)
+    func htmlUnescaped() -> String {
+        guard contains("&") else { return self }
+
+        guard let value = CFXMLCreateStringByUnescapingEntities(nil, self as CFString, nil) else {
+            return self
         }
 
-        return value
+        return value as String
     }
 
     func removingMarkdownArtifacts() -> String {

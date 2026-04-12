@@ -163,6 +163,88 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(document.tableOfContents[0].title.contains("$"))
     }
 
+    func testRendererDecodesEntitiesInProseWithoutLeakingEscapedHTML() {
+        let markdown = """
+        90% -&gt; α = 1.282
+        a &gt; b
+        x &lt; y
+        Tom &amp; Jerry
+        f&#39;(x)
+        if a &gt; b then ...
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("90% -&gt; α = 1.282"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("a &gt; b"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("x &lt; y"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("Tom &amp; Jerry"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("f&#39;(x)"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;gt;"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;lt;"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;#39;"), document.bodyHTML)
+    }
+
+    func testRendererRendersPlainProseCharactersWithoutEntityLeakage() {
+        let markdown = """
+        90% -> α = 1.282
+        a > b
+        x < y
+        Tom & Jerry
+        f'(x)
+        if a > b then ...
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("90% -&gt; α = 1.282"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("a &gt; b"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("x &lt; y"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("Tom &amp; Jerry"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("f&#39;(x)"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;gt;"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;lt;"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;#39;"), document.bodyHTML)
+    }
+
+    func testRendererDecodesEntitiesInsideEmphasis() {
+        let markdown = """
+        **a &gt; b** and *f&#39;(x)*
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("<strong>a &gt; b</strong>"), document.bodyHTML)
+        XCTAssertTrue(document.bodyHTML.contains("<em>f&#39;(x)</em>"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;gt;"), document.bodyHTML)
+        XCTAssertFalse(document.bodyHTML.contains("&amp;#39;"), document.bodyHTML)
+    }
+
+    func testRendererKeepsEntitiesLiteralInsideInlineCodeAndCodeBlocks() {
+        let markdown = """
+        `a &gt; b`
+
+        ```text
+        if a &gt; b then ...
+        ```
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("<code>a &amp;gt; b</code>"))
+        XCTAssertTrue(document.bodyHTML.contains("if a &amp;gt; b then ..."))
+    }
+
+    func testRendererDecodesEntitiesForOutlineTitles() {
+        let markdown = """
+        ## if a &gt; b then ...
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertEqual(document.tableOfContents[0].title, "if a > b then ...")
+    }
+
     private func flattenedTitles(in items: [TableOfContentsItem]) -> [String] {
         items.flatMap { $0.flattened().map(\.title) }
     }
