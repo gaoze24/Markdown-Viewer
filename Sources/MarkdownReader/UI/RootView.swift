@@ -1,5 +1,13 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+
+private enum ToolbarLayout {
+    static let iconSize: CGFloat = 13
+    static let iconButtonWidth: CGFloat = 30
+    static let iconButtonHeight: CGFloat = 24
+    static let iconButtonCornerRadius: CGFloat = 7
+}
 
 struct RootView: View {
     @ObservedObject var model: AppModel
@@ -8,7 +16,6 @@ struct RootView: View {
     @AppStorage(ReaderPreferenceKey.readingWidth) private var readingWidth = 820.0
     @AppStorage(ReaderPreferenceKey.showProgress) private var showProgress = true
 
-    @FocusState private var searchFieldFocused: Bool
     @State private var splitViewVisibility: NavigationSplitViewVisibility = .all
     @State private var isDropTargeted = false
 
@@ -48,12 +55,10 @@ struct RootView: View {
             .background(AppTheme.detailBackground)
         }
         .navigationTitle(model.windowTitle)
-        .background(AppTheme.windowBackground)
+        .background(AppTheme.windowBackground.ignoresSafeArea())
         .tint(AppTheme.tint)
         .toolbarBackground(AppTheme.windowBackground, for: .windowToolbar)
-        .onChange(of: model.searchFocusToken) { _, _ in
-            searchFieldFocused = true
-        }
+        .toolbarBackground(.visible, for: .windowToolbar)
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers in
             model.openDroppedProviders(providers)
         }
@@ -62,16 +67,18 @@ struct RootView: View {
                 Button {
                     model.openPanel()
                 } label: {
-                    Image(systemName: "folder")
+                    ToolbarIconGlyph(systemName: "folder")
                 }
+                .buttonStyle(.plain)
                 .help("Open")
                 .accessibilityLabel("Open")
 
                 Button {
                     model.reloadCurrentDocument()
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    ToolbarIconGlyph(systemName: "arrow.clockwise")
                 }
+                .buttonStyle(.plain)
                 .help("Reload")
                 .accessibilityLabel("Reload")
                 .disabled(!model.hasDocument)
@@ -92,7 +99,7 @@ struct RootView: View {
                 ToolbarSearchField(
                     searchQuery: $model.searchQuery,
                     hasDocument: model.hasDocument,
-                    searchFieldFocused: $searchFieldFocused
+                    focusRequestToken: model.searchFocusToken
                 )
 
                 if !model.searchQuery.isEmpty, model.hasDocument {
@@ -195,31 +202,79 @@ private struct ToolbarProgressView: View {
 private struct ToolbarSearchField: View {
     @Binding var searchQuery: String
     let hasDocument: Bool
-    @FocusState.Binding var searchFieldFocused: Bool
+    let focusRequestToken: UUID
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(hasDocument ? AppTheme.secondaryText : AppTheme.tertiaryText)
+        NativeToolbarSearchField(
+            text: $searchQuery,
+            placeholder: "Search",
+            isEnabled: hasDocument,
+            focusRequestToken: focusRequestToken
+        )
+        .frame(minWidth: 132, idealWidth: 170, maxWidth: 208)
+        .frame(height: 24)
+    }
+}
 
-            TextField("Search", text: $searchQuery)
-                .textFieldStyle(.plain)
-                .frame(minWidth: 120, idealWidth: 160, maxWidth: 200)
-                .focused($searchFieldFocused)
-                .disabled(!hasDocument)
-                .foregroundStyle(hasDocument ? AppTheme.primaryText : AppTheme.tertiaryText)
+private struct NativeToolbarSearchField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let isEnabled: Bool
+    let focusRequestToken: UUID
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let searchField = NSSearchField(frame: .zero)
+        searchField.delegate = context.coordinator
+        searchField.placeholderString = placeholder
+        searchField.sendsSearchStringImmediately = true
+        searchField.sendsWholeSearchString = true
+        searchField.focusRingType = .default
+        searchField.lineBreakMode = .byTruncatingTail
+        searchField.stringValue = text
+        searchField.isEnabled = isEnabled
+        return searchField
+    }
+
+    func updateNSView(_ nsView: NSSearchField, context: Context) {
+        context.coordinator.parent = self
+
+        if nsView.stringValue != text {
+            nsView.stringValue = text
         }
-        .padding(.horizontal, 10)
-        .frame(height: 28)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(AppTheme.chromeSurface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(AppTheme.softBorder, lineWidth: 1)
-        )
+
+        nsView.isEnabled = isEnabled
+
+        if context.coordinator.lastFocusRequestToken != focusRequestToken {
+            context.coordinator.lastFocusRequestToken = focusRequestToken
+
+            DispatchQueue.main.async {
+                guard isEnabled, nsView.window != nil else { return }
+                nsView.window?.makeFirstResponder(nsView)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var parent: NativeToolbarSearchField
+        var lastFocusRequestToken: UUID
+
+        init(parent: NativeToolbarSearchField) {
+            self.parent = parent
+            self.lastFocusRequestToken = parent.focusRequestToken
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let searchField = obj.object as? NSSearchField else { return }
+            let updatedText = searchField.stringValue
+
+            if parent.text != updatedText {
+                parent.text = updatedText
+            }
+        }
     }
 }
 
@@ -246,7 +301,7 @@ private struct ToolbarSearchNavigationView: View {
             Button {
                 searchPrevious()
             } label: {
-                Image(systemName: "chevron.up")
+                ToolbarIconGlyph(systemName: "chevron.up")
             }
             .buttonStyle(.plain)
             .disabled(searchQueryIsEmpty || !hasDocument)
@@ -254,10 +309,22 @@ private struct ToolbarSearchNavigationView: View {
             Button {
                 searchNext()
             } label: {
-                Image(systemName: "chevron.down")
+                ToolbarIconGlyph(systemName: "chevron.down")
             }
             .buttonStyle(.plain)
             .disabled(searchQueryIsEmpty || !hasDocument)
         }
+    }
+}
+
+private struct ToolbarIconGlyph: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: ToolbarLayout.iconSize, weight: .semibold))
+            .foregroundStyle(AppTheme.primaryText)
+            .frame(width: ToolbarLayout.iconButtonWidth, height: ToolbarLayout.iconButtonHeight)
+            .contentShape(RoundedRectangle(cornerRadius: ToolbarLayout.iconButtonCornerRadius, style: .continuous))
     }
 }

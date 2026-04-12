@@ -4,13 +4,14 @@ import SwiftUI
 private enum OutlineLayout {
     static let rowInsets = EdgeInsets(top: 0.5, leading: 2, bottom: 0.5, trailing: 5)
     static let depthIndent: CGFloat = 6
-    static let disclosureSlot: CGFloat = 8
-    static let leafDisclosureSlot: CGFloat = 5
-    static let disclosureIconSize: CGFloat = 8
-    static let disclosureToLabelSpacing: CGFloat = 3
-    static let labelSpacing: CGFloat = 7
+    static let disclosureSlot: CGFloat = 10
+    static let leafDisclosureSlot: CGFloat = 10
+    static let disclosureIconSize: CGFloat = 9
+    static let disclosureTapHeight: CGFloat = 14
+    static let disclosureToLabelSpacing: CGFloat = 2
+    static let labelSpacing: CGFloat = 6
     static let labelVerticalPadding: CGFloat = 2
-    static let labelLeadingPadding: CGFloat = 2
+    static let labelLeadingPadding: CGFloat = 1
     static let labelTrailingPadding: CGFloat = 4
     static let selectionCornerRadius: CGFloat = 6
     static let accentWidth: CGFloat = 2.5
@@ -137,11 +138,10 @@ private struct OutlineSidebarRow: View {
             leadingAccessory
 
             Button(action: selectAction) {
-                HStack(alignment: .top, spacing: OutlineLayout.labelSpacing) {
+                HStack(alignment: .center, spacing: OutlineLayout.labelSpacing) {
                     Capsule()
                         .fill(accent(for: row.level))
                         .frame(width: OutlineLayout.accentWidth, height: OutlineLayout.accentHeight)
-                        .padding(.top, 2)
 
                     Text(row.title)
                         .font(row.isActive ? .system(size: 12.5, weight: .semibold) : .system(size: 12.5, weight: .regular))
@@ -178,13 +178,13 @@ private struct OutlineSidebarRow: View {
                     Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: OutlineLayout.disclosureIconSize, weight: .semibold))
                         .foregroundStyle(AppTheme.secondaryText)
-                        .frame(width: OutlineLayout.disclosureSlot, height: OutlineLayout.disclosureSlot)
+                        .frame(width: OutlineLayout.disclosureSlot, height: OutlineLayout.disclosureTapHeight)
                 }
                 .buttonStyle(.plain)
                 .help(row.isExpanded ? "Collapse Section" : "Expand Section")
             } else {
                 Color.clear
-                    .frame(width: OutlineLayout.leafDisclosureSlot, height: OutlineLayout.disclosureSlot)
+                    .frame(width: OutlineLayout.leafDisclosureSlot, height: OutlineLayout.disclosureTapHeight)
             }
 
             Color.clear
