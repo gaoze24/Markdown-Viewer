@@ -496,8 +496,12 @@ private struct Parser {
             pattern: RegexPatterns.inlineCode,
             options: []
         ) { match in
-            let value = capture(match, in: source, group: 1).htmlEscaped()
-            return codeSpans.store("<code>\(value)</code>")
+            let value = capture(match, in: source, group: 1)
+            if shouldPromoteInlineCodeToMath(value, in: source, matchRange: match.range) {
+                return mathSpans.store(mathPlaceholderHTML(source: value, display: false))
+            }
+
+            return codeSpans.store("<code>\(value.htmlEscaped())</code>")
         }
 
         source = html
@@ -634,6 +638,63 @@ private struct Parser {
         }
 
         return String(source[range])
+    }
+
+    private func shouldPromoteInlineCodeToMath(_ value: String, in source: String, matchRange: NSRange) -> Bool {
+        let candidate = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !candidate.isEmpty else { return false }
+        guard candidate.count <= 80 else { return false }
+        guard !candidate.contains("\n") else { return false }
+
+        if matchesRegex(RegexPatterns.inlineCodeMathCommand, in: candidate) {
+            // Avoid promoting common code escape forms and filesystem paths.
+            if matchesRegex(RegexPatterns.inlineCodeBackslashLikelyCode, in: candidate) {
+                return false
+            }
+            return true
+        }
+
+        if matchesRegex(RegexPatterns.inlineCodeLikelyProgramming, in: candidate) {
+            return false
+        }
+
+        if candidate.contains("^") {
+            return true
+        }
+
+        if candidate.contains("_") {
+            if candidate.contains("{") || candidate.contains("}") {
+                return true
+            }
+
+            if matchesRegex(RegexPatterns.inlineCodeShortSubscriptIdentifier, in: candidate) {
+                return true
+            }
+
+            if matchesRegex(RegexPatterns.inlineCodeContainsShortSubscriptTerm, in: candidate) {
+                return true
+            }
+        }
+
+        if matchesRegex(RegexPatterns.inlineCodeSingleSymbol, in: candidate) {
+            return contextLooksMathematical(in: source, matchRange: matchRange)
+        }
+
+        return false
+    }
+
+    private func contextLooksMathematical(in source: String, matchRange: NSRange) -> Bool {
+        guard let range = Range(matchRange, in: source) else { return false }
+
+        let prefix = String(source[..<range.lowerBound].suffix(64)).lowercased()
+        let suffix = String(source[range.upperBound...].prefix(64)).lowercased()
+        let context = "\(prefix) \(suffix)"
+
+        if matchesRegex(RegexPatterns.inlineCodeContextLikelyProgramming, in: context) {
+            return false
+        }
+
+        return matchesRegex(RegexPatterns.inlineCodeContextLikelyMath, in: context)
     }
 
     private func mathPlaceholderHTML(source: String, display: Bool) -> String {
@@ -808,6 +869,14 @@ private struct Parser {
         static let footnoteDefinition = #"^\[\^([^\]]+)\]:\s*(.*)$"#
 
         static let inlineCode = #"`([^`]+)`"#
+        static let inlineCodeLikelyProgramming = #"(^|\s)(for|while|if|else|return|func|let|var|const|class|struct|import|from|range)\b|[.;]|->|::|\(|\)|\[|\]|\."#
+        static let inlineCodeMathCommand = #"\\[A-Za-z]{2,}"#
+        static let inlineCodeBackslashLikelyCode = #"[A-Za-z]:\\[A-Za-z]|\\[nrt0'\"\\]"#
+        static let inlineCodeShortSubscriptIdentifier = #"^(?:[A-Za-z]{1,2}|\\[A-Za-z]+)_[A-Za-z0-9]{1,3}$"#
+        static let inlineCodeContainsShortSubscriptTerm = #"(^|[^A-Za-z0-9\\])(?:[A-Za-z]{1,2}|\\[A-Za-z]+)_[A-Za-z0-9]{1,3}(?=$|[^A-Za-z0-9])"#
+        static let inlineCodeSingleSymbol = #"^[A-Za-z]$"#
+        static let inlineCodeContextLikelyMath = #"\b(let|suppose|assume|denote|where|factor|factors|portfolio|value|vector|matrix|covariance|variance|exposure|weight|weights|returns?)\b"#
+        static let inlineCodeContextLikelyProgramming = #"\b(code|function|method|class|struct|loop|index|array|list|dictionary|string|integer|variable|call|compile|runtime|syntax|script)\b"#
         static let inlineMathParen = #"\\\(((?:\\.|[^\\])+?)\\\)"#
         static let inlineMathDollar = #"(?<!\\)\$(?![\s$])((?:\\.|[^$\\])+?)(?<!\\)\$"#
         static let image = #"\!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)"#

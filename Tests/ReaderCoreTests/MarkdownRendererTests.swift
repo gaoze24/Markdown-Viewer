@@ -93,6 +93,57 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(document.bodyHTML.contains("&#39;"))
     }
 
+    func testRendererPromotesMathLikeInlineCodeSpansInMathProse() {
+        let markdown = """
+        Let `x_{i,t}` be dollar exposure to factor `i`.
+        If `V_t` is portfolio value and `x = w_t` is the exposure vector.
+        Suppose there are `N` risk factors and `C` is the covariance matrix.
+        Returns follow `R \\sim N(\\mu,\\sigma^2)` in the Gaussian model.
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains(Data("x_{i,t}".utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data("i".utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data("V_t".utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data("x = w_t".utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data("N".utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data("C".utf8).base64EncodedString()))
+        XCTAssertTrue(document.bodyHTML.contains(Data(#"R \sim N(\mu,\sigma^2)"#.utf8).base64EncodedString()))
+        XCTAssertFalse(document.bodyHTML.contains("<code>x_{i,t}</code>"))
+        XCTAssertFalse(document.bodyHTML.contains("<code>V_t</code>"))
+        XCTAssertFalse(document.bodyHTML.contains("<code>N</code>"))
+        XCTAssertFalse(document.bodyHTML.contains("<code>R \\sim N(\\mu,\\sigma^2)</code>"))
+    }
+
+    func testRendererKeepsProgrammingInlineCodeAsCode() {
+        let markdown = """
+        Use `for i in range(n)` with `sigma_p2`, call `portfolio_var()`, and keep `let x = 3` as code.
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("<code>for i in range(n)</code>"))
+        XCTAssertTrue(document.bodyHTML.contains("<code>sigma_p2</code>"))
+        XCTAssertTrue(document.bodyHTML.contains("<code>portfolio_var()</code>"))
+        XCTAssertTrue(document.bodyHTML.contains("<code>let x = 3</code>"))
+        XCTAssertFalse(document.bodyHTML.contains(Data("sigma_p2".utf8).base64EncodedString()))
+        XCTAssertFalse(document.bodyHTML.contains(Data("portfolio_var()".utf8).base64EncodedString()))
+        XCTAssertFalse(document.bodyHTML.contains(Data("let x = 3".utf8).base64EncodedString()))
+    }
+
+    func testRendererDoesNotPromoteLongUnderscoreAssignments() {
+        let markdown = """
+        Keep `user_id = value` and `sigma_p2` as code in implementation notes.
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("<code>user_id = value</code>"))
+        XCTAssertTrue(document.bodyHTML.contains("<code>sigma_p2</code>"))
+        XCTAssertFalse(document.bodyHTML.contains(Data("user_id = value".utf8).base64EncodedString()))
+    }
+
     func testRendererLiftsDisplayMathIntoDedicatedBlocks() {
         let markdown = """
         $$

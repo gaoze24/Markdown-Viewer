@@ -33,6 +33,7 @@ struct SidebarView: View {
                 outlineSection
                 recentFilesSection
             }
+            .id(model.sidebarListIdentity)
             .scrollContentBackground(.hidden)
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 240, ideal: 280)

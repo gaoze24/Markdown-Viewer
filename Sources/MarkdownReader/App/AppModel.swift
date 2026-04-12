@@ -100,6 +100,14 @@ final class AppModel: ObservableObject {
         !outlineRows.isEmpty
     }
 
+    var sidebarListIdentity: String {
+        guard hasDocument, let currentFileURL else {
+            return "recents-mode"
+        }
+
+        return "outline-mode-\(Self.documentKey(for: currentFileURL))"
+    }
+
     var hasExpandableOutlineItems: Bool {
         renderedDocument?.tableOfContents.contains { $0.hasChildren } == true
     }
