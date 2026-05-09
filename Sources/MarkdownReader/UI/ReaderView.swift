@@ -12,7 +12,7 @@ struct ReaderView: View {
                 bodyHTML: renderedDocument.bodyHTML,
                 baseURL: model.documentBaseURL,
                 displaySettings: displaySettings,
-                searchQuery: model.searchQuery,
+                searchQuery: model.debouncedSearchQuery,
                 searchNavigationRequest: model.searchNavigationRequest,
                 anchorNavigationRequest: model.anchorNavigationRequest,
                 onSearchUpdate: model.updateSearchResults(count:currentIndex:),

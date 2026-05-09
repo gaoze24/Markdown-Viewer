@@ -2,83 +2,97 @@ import ReaderCore
 import SwiftUI
 
 private enum OutlineLayout {
-    static let rowInsets = EdgeInsets(top: 0.5, leading: 2, bottom: 0.5, trailing: 5)
-    static let depthIndent: CGFloat = 6
-    static let disclosureSlot: CGFloat = 10
-    static let leafDisclosureSlot: CGFloat = 10
-    static let disclosureIconSize: CGFloat = 9
-    static let disclosureTapHeight: CGFloat = 14
-    static let disclosureToLabelSpacing: CGFloat = 2
-    static let labelSpacing: CGFloat = 6
-    static let labelVerticalPadding: CGFloat = 2
-    static let labelLeadingPadding: CGFloat = 1
-    static let labelTrailingPadding: CGFloat = 4
-    static let selectionCornerRadius: CGFloat = 6
+    static let rowInsets = EdgeInsets(top: 3, leading: 4, bottom: 3, trailing: 6)
+    static let depthIndent: CGFloat = 8
+    static let disclosureSlot: CGFloat = 16
+    static let leafDisclosureSlot: CGFloat = 16
+    static let disclosureIconSize: CGFloat = 10
+    static let disclosureTapHeight: CGFloat = 24
+    static let disclosureToLabelSpacing: CGFloat = 4
+    static let labelSpacing: CGFloat = 8
+    static let labelVerticalPadding: CGFloat = 6
+    static let labelLeadingPadding: CGFloat = 4
+    static let labelTrailingPadding: CGFloat = 6
+    static let selectionCornerRadius: CGFloat = 8
     static let accentWidth: CGFloat = 2.5
-    static let accentHeight: CGFloat = 12
-    static let headerSpacing: CGFloat = 6
-    static let headerBottomPadding: CGFloat = 1
-    static let headerMenuIconSize: CGFloat = 12
+    static let accentHeight: CGFloat = 15
+    static let headerSpacing: CGFloat = 8
+    static let headerBottomPadding: CGFloat = 4
+    static let headerMenuIconSize: CGFloat = 13
+    static let headerMenuButtonSize: CGFloat = 26
+    static let chromeHorizontalPadding: CGFloat = 16
+    static let chromeTopPadding: CGFloat = 14
+    static let chromeBottomPadding: CGFloat = 12
 }
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        ZStack {
-            AppTheme.sidebarBackground
-                .ignoresSafeArea()
+        VStack(spacing: 0) {
+            SidebarChromeHeader(
+                title: model.hasDocument ? "Outline" : "Library",
+                subtitle: sidebarSubtitle,
+                hasExpandableItems: model.hasDocument && model.hasExpandableOutlineItems,
+                expandAllAction: model.expandAllOutlineItems,
+                collapseAllAction: model.collapseAllOutlineItems
+            )
 
             List {
-                outlineSection
+                if model.hasDocument {
+                    outlineSection
+                }
                 recentFilesSection
             }
             .id(model.sidebarListIdentity)
             .scrollContentBackground(.hidden)
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 240, ideal: 280)
-            .animation(.easeInOut(duration: 0.16), value: model.outlineRows.map(\.id))
-            .animation(.easeInOut(duration: 0.18), value: model.recentFiles.map(\.id))
+            .navigationSplitViewColumnWidth(min: 252, ideal: 288)
+            .animation(.easeInOut(duration: 0.16), value: model.outlineStructureToken)
+            .animation(.easeInOut(duration: 0.18), value: model.recentFiles.count)
+        }
+        .background(AppTheme.sidebarBackground)
+    }
+
+    private var sidebarSubtitle: String? {
+        if model.hasDocument {
+            model.outlineRows.isEmpty ? "No headings found" : nil
+        } else {
+            "Recent markdown files"
         }
     }
 
     @ViewBuilder
     private var outlineSection: some View {
-        if model.hasDocument {
-            Section {
-                if model.outlineRows.isEmpty {
-                    Text("No headings found")
-                        .foregroundStyle(AppTheme.secondaryText)
-                } else {
-                    ForEach(model.outlineRows) { row in
-                        OutlineSidebarRow(
-                            row: row,
-                            toggleAction: {
-                                withAnimation(.easeInOut(duration: 0.16)) {
-                                    model.toggleOutlineExpansion(for: row.heading)
-                                }
-                            },
-                            selectAction: { model.jumpToHeading(row.heading) }
-                        )
-                        .listRowInsets(OutlineLayout.rowInsets)
-                    }
+        Section {
+            if model.outlineRows.isEmpty {
+                Text("No headings found")
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(model.outlineRows) { row in
+                    OutlineSidebarRow(
+                        row: row,
+                        toggleAction: {
+                            withAnimation(.easeInOut(duration: 0.16)) {
+                                model.toggleOutlineExpansion(for: row.heading)
+                            }
+                        },
+                        selectAction: { model.jumpToHeading(row.heading) }
+                    )
+                    .listRowInsets(OutlineLayout.rowInsets)
                 }
-            } header: {
-                OutlineSectionHeader(
-                    hasExpandableItems: model.hasExpandableOutlineItems,
-                    expandAllAction: { model.expandAllOutlineItems() },
-                    collapseAllAction: { model.collapseAllOutlineItems() }
-                )
             }
         }
     }
 
     @ViewBuilder
     private var recentFilesSection: some View {
-        Section("Recent Files") {
+        Section {
             if model.recentFiles.isEmpty {
                 Text("Open a Markdown file to build a reading history.")
                     .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.vertical, 4)
             } else {
                 ForEach(model.recentFiles) { item in
                     SidebarRecentFileRow(
@@ -92,40 +106,73 @@ struct SidebarView: View {
                     )
                 }
             }
+        } header: {
+            SecondarySidebarSectionHeader(title: "Recent Files")
         }
     }
-
 }
 
-private struct OutlineSectionHeader: View {
+private struct SidebarChromeHeader: View {
+    let title: String
+    let subtitle: String?
     let hasExpandableItems: Bool
     let expandAllAction: () -> Void
     let collapseAllAction: () -> Void
 
     var body: some View {
-        HStack(spacing: OutlineLayout.headerSpacing) {
-            Text("Outline")
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(AppTheme.tertiaryText)
+        VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 10) {
+            HStack(spacing: OutlineLayout.headerSpacing) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.primaryText)
 
-            Spacer()
+                Spacer(minLength: 12)
 
-            if hasExpandableItems {
-                Menu {
-                    Button("Expand All", action: expandAllAction)
-                    Button("Collapse All", action: collapseAllAction)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: OutlineLayout.headerMenuIconSize, weight: .regular))
-                        .foregroundStyle(AppTheme.secondaryText)
+                if hasExpandableItems {
+                    Menu {
+                        Button("Expand All", action: expandAllAction)
+                        Button("Collapse All", action: collapseAllAction)
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: OutlineLayout.headerMenuIconSize, weight: .regular))
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .frame(width: OutlineLayout.headerMenuButtonSize, height: OutlineLayout.headerMenuButtonSize)
+                            .background(AppTheme.controlSubtleFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .help("Outline Options")
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .help("Outline Options")
+            }
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
             }
         }
-        .padding(.bottom, OutlineLayout.headerBottomPadding)
-        .textCase(nil)
+        .padding(.horizontal, OutlineLayout.chromeHorizontalPadding)
+        .padding(.top, OutlineLayout.chromeTopPadding)
+        .padding(.bottom, OutlineLayout.chromeBottomPadding)
+        .background(AppTheme.sidebarBackground)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.softBorder)
+                .frame(height: 1)
+        }
+    }
+}
+
+private struct SecondarySidebarSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11.5, weight: .semibold))
+            .foregroundStyle(AppTheme.tertiaryText)
+            .padding(.bottom, OutlineLayout.headerBottomPadding)
+            .textCase(nil)
     }
 }
 
@@ -133,6 +180,9 @@ private struct OutlineSidebarRow: View {
     let row: OutlineRowItem
     let toggleAction: () -> Void
     let selectAction: () -> Void
+
+    @State private var isHovered = false
+    @State private var isDisclosureHovered = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
@@ -145,7 +195,7 @@ private struct OutlineSidebarRow: View {
                         .frame(width: OutlineLayout.accentWidth, height: OutlineLayout.accentHeight)
 
                     Text(row.title)
-                        .font(row.isActive ? .system(size: 12.5, weight: .semibold) : .system(size: 12.5, weight: .regular))
+                        .font(row.isActive ? .system(size: 13, weight: .semibold) : .system(size: 13, weight: .regular))
                         .foregroundStyle(row.isActive ? AppTheme.primaryText : (row.hasActiveDescendant ? AppTheme.primaryText : AppTheme.secondaryText))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -163,7 +213,12 @@ private struct OutlineSidebarRow: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.vertical, 0.5)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
     }
 
     @ViewBuilder
@@ -180,9 +235,15 @@ private struct OutlineSidebarRow: View {
                         .font(.system(size: OutlineLayout.disclosureIconSize, weight: .semibold))
                         .foregroundStyle(AppTheme.secondaryText)
                         .frame(width: OutlineLayout.disclosureSlot, height: OutlineLayout.disclosureTapHeight)
+                        .background(disclosureBackgroundStyle, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .help(row.isExpanded ? "Collapse Section" : "Expand Section")
+                .onHover { hovering in
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        isDisclosureHovered = hovering
+                    }
+                }
             } else {
                 Color.clear
                     .frame(width: OutlineLayout.leafDisclosureSlot, height: OutlineLayout.disclosureTapHeight)
@@ -202,6 +263,10 @@ private struct OutlineSidebarRow: View {
             return AppTheme.subtleAccentFill.opacity(0.45)
         }
 
+        if isHovered {
+            return AppTheme.controlSubtleFill
+        }
+
         return .clear
     }
 
@@ -211,6 +276,10 @@ private struct OutlineSidebarRow: View {
 
     private var borderWidth: CGFloat {
         row.isActive ? 1 : 0
+    }
+
+    private var disclosureBackgroundStyle: Color {
+        isDisclosureHovered ? AppTheme.controlHoverFill : .clear
     }
 
     private func accent(for level: Int) -> Color {
@@ -242,7 +311,7 @@ private struct SidebarRecentFileRow: View {
                         .lineLimit(2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
             .disabled(!item.isAvailable)

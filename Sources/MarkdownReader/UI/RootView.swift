@@ -3,10 +3,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum ToolbarLayout {
-    static let iconSize: CGFloat = 13
-    static let iconButtonWidth: CGFloat = 30
-    static let iconButtonHeight: CGFloat = 24
-    static let iconButtonCornerRadius: CGFloat = 7
+    static let iconSize: CGFloat = 14
+    static let iconButtonWidth: CGFloat = 36
+    static let iconButtonHeight: CGFloat = 30
+    static let iconButtonCornerRadius: CGFloat = 9
 }
 
 struct RootView: View {
@@ -26,7 +26,6 @@ struct RootView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $splitViewVisibility) {
             SidebarView(model: model)
-                .frame(minWidth: 250, idealWidth: 280)
                 .background(AppTheme.sidebarBackground)
         } detail: {
             Group {
@@ -69,7 +68,7 @@ struct RootView: View {
                 } label: {
                     ToolbarIconGlyph(systemName: "folder")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ToolbarIconButtonStyle())
                 .help("Open")
                 .accessibilityLabel("Open")
 
@@ -78,7 +77,7 @@ struct RootView: View {
                 } label: {
                     ToolbarIconGlyph(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ToolbarIconButtonStyle())
                 .help("Reload")
                 .accessibilityLabel("Reload")
                 .disabled(!model.hasDocument)
@@ -92,7 +91,7 @@ struct RootView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                if showProgress, model.hasDocument {
+                if showProgress, model.hasDocument, model.scrollProgress > 0 {
                     ToolbarProgressView(progress: model.scrollProgress)
                 }
 
@@ -130,8 +129,8 @@ private struct ToolbarTitleView: View {
             titleLine
                 .frame(minWidth: 120, idealWidth: 180, maxWidth: 220, alignment: .center)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
         .clipped()
     }
 
@@ -173,22 +172,22 @@ private struct ToolbarProgressView: View {
     let progress: Double
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 8) {
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
                     .fill(AppTheme.divider)
-                    .frame(width: 40, height: 4)
+                    .frame(width: 48, height: 4)
 
                 Capsule(style: .continuous)
                     .fill(progressTint)
-                    .frame(width: max(6, 40 * progress), height: 4)
+                    .frame(width: max(6, 48 * progress), height: 4)
             }
 
             Text("\(Int(progress * 100))%")
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(AppTheme.secondaryText)
         }
-        .frame(minWidth: 82, alignment: .leading)
+        .frame(minWidth: 90, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Reading progress")
         .accessibilityValue("\(Int(progress * 100)) percent")
@@ -211,8 +210,8 @@ private struct ToolbarSearchField: View {
             isEnabled: hasDocument,
             focusRequestToken: focusRequestToken
         )
-        .frame(minWidth: 132, idealWidth: 170, maxWidth: 208)
-        .frame(height: 24)
+        .frame(minWidth: 160, idealWidth: 210, maxWidth: 260)
+        .frame(height: 30)
     }
 }
 
@@ -297,13 +296,13 @@ private struct ToolbarSearchNavigationView: View {
     let searchNext: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Button {
                 searchPrevious()
             } label: {
                 ToolbarIconGlyph(systemName: "chevron.up")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ToolbarIconButtonStyle())
             .disabled(searchQueryIsEmpty || !hasDocument)
 
             Button {
@@ -311,20 +310,78 @@ private struct ToolbarSearchNavigationView: View {
             } label: {
                 ToolbarIconGlyph(systemName: "chevron.down")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ToolbarIconButtonStyle())
             .disabled(searchQueryIsEmpty || !hasDocument)
         }
+    }
+}
+
+private struct ToolbarIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        ToolbarIconButtonBody(configuration: configuration)
+    }
+}
+
+private struct ToolbarIconButtonBody: View {
+    let configuration: ToolbarIconButtonStyle.Configuration
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: ToolbarLayout.iconButtonCornerRadius, style: .continuous)
+
+        configuration.label
+            .frame(width: ToolbarLayout.iconButtonWidth, height: ToolbarLayout.iconButtonHeight)
+            .background(backgroundStyle, in: shape)
+            .overlay(
+                shape
+                    .strokeBorder(borderStyle, lineWidth: borderWidth)
+            )
+            .clipShape(shape)
+            .contentShape(shape)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+
+    private var backgroundStyle: Color {
+        guard isEnabled else { return .clear }
+        if configuration.isPressed {
+            return AppTheme.controlHoverFill.opacity(0.9)
+        }
+        return isHovered ? AppTheme.controlHoverFill : .clear
+    }
+
+    private var borderStyle: Color {
+        guard isEnabled else { return .clear }
+        if configuration.isPressed || isHovered {
+            return AppTheme.controlHoverBorder
+        }
+        return .clear
+    }
+
+    private var borderWidth: CGFloat {
+        configuration.isPressed || isHovered ? 1 : 0
     }
 }
 
 private struct ToolbarIconGlyph: View {
     let systemName: String
 
+    @Environment(\.isEnabled) private var isEnabled
+
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: ToolbarLayout.iconSize, weight: .semibold))
-            .foregroundStyle(AppTheme.primaryText)
-            .frame(width: ToolbarLayout.iconButtonWidth, height: ToolbarLayout.iconButtonHeight)
-            .contentShape(RoundedRectangle(cornerRadius: ToolbarLayout.iconButtonCornerRadius, style: .continuous))
+            .foregroundStyle(iconForeground)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var iconForeground: Color {
+        isEnabled ? AppTheme.primaryText : AppTheme.tertiaryText
     }
 }

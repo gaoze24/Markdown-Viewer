@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import ReaderCore
 import UniformTypeIdentifiers
@@ -60,11 +61,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var renderedDocument: RenderedDocument?
     @Published private(set) var currentFileURL: URL?
     @Published private(set) var outlineRows: [OutlineRowItem] = []
+    /// Bumps when outline structure (set of rows / expansion) changes, but not
+    /// when only highlight state shifts. Used to drive list animations without
+    /// re-allocating an `[String]` of row ids on every body evaluation.
+    @Published private(set) var outlineStructureToken: Int = 0
     @Published private(set) var recentFiles: [RecentFileItem] = []
     @Published private(set) var isLoading = false
     @Published private(set) var loadErrorMessage: String?
     @Published private(set) var availabilityMessage: String?
     @Published var searchQuery = ""
+    /// Debounced mirror of `searchQuery`. Bound to the WebView's `performSearch`
+    /// so we do not walk the entire document on every keystroke.
+    @Published private(set) var debouncedSearchQuery: String = ""
     @Published private(set) var searchResultCount = 0
     @Published private(set) var currentSearchResult = 0
     @Published private(set) var scrollProgress = 0.0
@@ -115,11 +123,26 @@ final class AppModel: ObservableObject {
     private let renderer = MarkdownRenderer()
     private let recentStore = RecentFilesStore()
     private let watcher = FileWatcher()
-    private let scrollProgressDeltaThreshold = 0.0025
+    private static let searchDebounceNanoseconds: UInt64 = 140_000_000
     private var loadTask: Task<Void, Never>?
+    private var searchDebounceTask: Task<Void, Never>?
     private var pendingBootstrap = false
     private var outlineExpandedIDsByDocument: [String: Set<String>] = [:]
     private var outlineParentByID: [String: String] = [:]
+    private var lastReportedScrollPercent: Int = -1
+    private var lastSearchQueryForDebounce: String = ""
+    private var pendingProgrammaticHeadingID: String?
+    private var programmaticHeadingUnlockTask: Task<Void, Never>?
+    private var cancellables: Set<AnyCancellable> = []
+
+    init() {
+        $searchQuery
+            .removeDuplicates()
+            .sink { [weak self] newValue in
+                self?.scheduleSearchDebounce(for: newValue)
+            }
+            .store(in: &cancellables)
+    }
 
     func bootstrapIfNeeded() {
         guard !pendingBootstrap else { return }
@@ -143,6 +166,7 @@ final class AppModel: ObservableObject {
     }
 
     func jumpToHeading(_ heading: TableOfContentsItem) {
+        lockProgrammaticHeadingSelection(to: heading.id)
         activeHeadingID = heading.id
         let didExpandAncestors = expandAncestors(of: heading.id)
         if didExpandAncestors {
@@ -182,17 +206,47 @@ final class AppModel: ObservableObject {
     }
 
     func updateScrollProgress(_ progress: Double) {
-        let clampedProgress = min(max(progress, 0), 1)
-        if abs(clampedProgress - scrollProgress) < scrollProgressDeltaThreshold,
-           clampedProgress != 0,
-           clampedProgress != 1 {
+        let clamped = min(max(progress, 0), 1)
+        let percent = Int((clamped * 100).rounded())
+        guard percent != lastReportedScrollPercent else { return }
+        lastReportedScrollPercent = percent
+        scrollProgress = Double(percent) / 100
+    }
+
+    /// Schedule a debounced update of `debouncedSearchQuery` so the WebView
+    /// only re-runs `performSearch` once typing pauses.
+    func scheduleSearchDebounce(for nextValue: String) {
+        guard nextValue != lastSearchQueryForDebounce else { return }
+        lastSearchQueryForDebounce = nextValue
+
+        searchDebounceTask?.cancel()
+
+        // Empty queries clear immediately so highlights vanish without lag.
+        if nextValue.isEmpty {
+            debouncedSearchQuery = ""
             return
         }
 
-        scrollProgress = clampedProgress
+        searchDebounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: AppModel.searchDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                guard self.searchQuery == nextValue else { return }
+                self.debouncedSearchQuery = nextValue
+            }
+        }
     }
 
     func updateActiveHeading(_ headingID: String?) {
+        if let pendingProgrammaticHeadingID {
+            if headingID == pendingProgrammaticHeadingID {
+                unlockProgrammaticHeadingSelection()
+            } else {
+                return
+            }
+        }
+
         guard headingID != activeHeadingID else { return }
         activeHeadingID = headingID
         let didExpandAncestors = expandAncestors(of: headingID)
@@ -202,6 +256,25 @@ final class AppModel: ObservableObject {
         } else {
             refreshOutlineHighlightState()
         }
+    }
+
+    private func lockProgrammaticHeadingSelection(to headingID: String) {
+        pendingProgrammaticHeadingID = headingID
+        programmaticHeadingUnlockTask?.cancel()
+        programmaticHeadingUnlockTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self, self.pendingProgrammaticHeadingID == headingID else { return }
+                self.unlockProgrammaticHeadingSelection()
+            }
+        }
+    }
+
+    private func unlockProgrammaticHeadingSelection() {
+        pendingProgrammaticHeadingID = nil
+        programmaticHeadingUnlockTask?.cancel()
+        programmaticHeadingUnlockTask = nil
     }
 
     func openPanel() {
@@ -376,6 +449,7 @@ final class AppModel: ObservableObject {
         guard let renderedDocument else {
             outlineRows = []
             outlineParentByID = [:]
+            outlineStructureToken &+= 1
             return
         }
 
@@ -386,6 +460,7 @@ final class AppModel: ObservableObject {
             activeHeadingID: activeHeadingID,
             activePath: activePath
         )
+        outlineStructureToken &+= 1
     }
 
     private func refreshOutlineHighlightState() {

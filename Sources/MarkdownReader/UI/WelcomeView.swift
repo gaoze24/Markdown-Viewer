@@ -18,7 +18,10 @@ struct WelcomeView: View {
     }
 
     private var displayedRecentFiles: [RecentFileItem] {
-        remainingRecentFiles.isEmpty ? recentFiles : remainingRecentFiles
+        // Always show what's *not* already featured. Falling back to the full
+        // list duplicated the most-recent file on the page when only one entry
+        // existed.
+        remainingRecentFiles
     }
 
     var body: some View {
@@ -80,13 +83,16 @@ struct WelcomeView: View {
                     Button("Clear Recent Files…", action: clearRecentFilesAction)
                         .buttonStyle(.plain)
                         .foregroundStyle(AppTheme.secondaryText)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.controlSubtleFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
 
                 Button(action: openAction) {
                     Label("Open File", systemImage: "folder.badge.plus")
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.regular)
+                .controlSize(.large)
             }
         }
         .padding(.bottom, 4)
@@ -163,7 +169,7 @@ struct WelcomeView: View {
                         Label("Choose Markdown File", systemImage: "folder")
                     }
                     .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .controlSize(.regular)
                 }
             }
             .padding(.vertical, 10)

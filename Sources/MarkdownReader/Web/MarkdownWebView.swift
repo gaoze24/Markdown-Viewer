@@ -34,13 +34,13 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.setValue(false, forKey: "drawsBackground")
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = false
+        webView.allowsBackForwardNavigationGestures = false
         configureScrollInsets(for: webView)
         context.coordinator.loadIfNeeded(in: webView, parent: self)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        configureScrollInsets(for: webView)
         context.coordinator.parent = self
         context.coordinator.loadIfNeeded(in: webView, parent: self)
         context.coordinator.applyDisplaySettingsIfNeeded(on: webView)
@@ -51,11 +51,16 @@ struct MarkdownWebView: NSViewRepresentable {
 
     private func configureScrollInsets(for webView: WKWebView) {
         let insets = NSEdgeInsets(top: Layout.topInset, left: 0, bottom: Layout.bottomInset, right: 0)
-        guard let scrollView = webView.subviews.first(where: { $0 is NSScrollView }) as? NSScrollView else {
+        guard let scrollView = webView.enclosingScrollView ?? webView.subviews.first(where: { $0 is NSScrollView }) as? NSScrollView else {
             return
         }
         scrollView.contentInsets = insets
         scrollView.scrollerInsets = insets
+        scrollView.hasHorizontalScroller = false
+        scrollView.horizontalScrollElasticity = .none
+        scrollView.verticalScrollElasticity = .automatic
+        scrollView.drawsBackground = false
+        scrollView.automaticallyAdjustsContentInsets = false
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
@@ -63,31 +68,36 @@ struct MarkdownWebView: NSViewRepresentable {
         static let activeHeadingHandlerName = "readerActiveHeading"
 
         var parent: MarkdownWebView
-        private var lastHTML = ""
+        // Tracks the last loaded body. Display settings deliberately do *not*
+        // participate in this key so font-size / reading-width changes are
+        // applied via JavaScript instead of a full reload that would reset
+        // scroll position and re-run KaTeX.
+        private var lastLoadedBodyHTML: String?
+        private var lastLoadedBaseURL: URL?
         private var lastSearchQuery = ""
         private var lastSearchNavigationID: UUID?
         private var lastAnchorNavigationID: UUID?
         private var lastDisplaySettings: ReaderDisplaySettings?
-        private var lastPostedProgress: Double = -1
-        private var lastProgressPostTime = CACurrentMediaTime()
         private var lastPostedHeadingID: String?
         private var isLoaded = false
-
-        private static let minimumProgressDelta = 0.003
-        private static let minimumProgressInterval: CFTimeInterval = 1.0 / 20.0
 
         init(parent: MarkdownWebView) {
             self.parent = parent
         }
 
         func loadIfNeeded(in webView: WKWebView, parent: MarkdownWebView) {
-            let html = ReaderHTMLTemplate.makeDocument(bodyHTML: parent.bodyHTML, settings: parent.displaySettings)
-            guard html != lastHTML else { return }
-            lastHTML = html
+            let bodyChanged = lastLoadedBodyHTML != parent.bodyHTML
+            let baseURLChanged = lastLoadedBaseURL != parent.baseURL
+            guard bodyChanged || baseURLChanged else { return }
+
+            lastLoadedBodyHTML = parent.bodyHTML
+            lastLoadedBaseURL = parent.baseURL
             isLoaded = false
-            lastPostedProgress = -1
+            lastDisplaySettings = nil
+            lastSearchQuery = ""
             lastPostedHeadingID = nil
-            lastProgressPostTime = CACurrentMediaTime()
+
+            let html = ReaderHTMLTemplate.makeDocument(bodyHTML: parent.bodyHTML, settings: parent.displaySettings)
             webView.loadHTMLString(html, baseURL: parent.baseURL)
         }
 
@@ -184,18 +194,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == Self.progressHandlerName, let value = message.body as? Double {
-                let clampedProgress = min(max(value, 0), 1)
-                let now = CACurrentMediaTime()
-                let progressChanged = abs(clampedProgress - lastPostedProgress) >= Self.minimumProgressDelta
-                let timeElapsed = now - lastProgressPostTime >= Self.minimumProgressInterval
-
-                guard lastPostedProgress < 0 || progressChanged || timeElapsed || clampedProgress == 0 || clampedProgress == 1 else {
-                    return
-                }
-
-                lastPostedProgress = clampedProgress
-                lastProgressPostTime = now
-                parent.onProgressUpdate(clampedProgress)
+                parent.onProgressUpdate(min(max(value, 0), 1))
                 return
             }
 

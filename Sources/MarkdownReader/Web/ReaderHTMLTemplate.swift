@@ -1,8 +1,18 @@
 import Foundation
 
 enum ReaderHTMLTemplate {
+    static let mathPlaceholderClass = "math-placeholder"
+
     static func makeDocument(bodyHTML: String, settings: ReaderDisplaySettings) -> String {
         let mathAssets = BundledMathAssets.shared
+        let includeMath = bodyHTML.contains(mathPlaceholderClass)
+
+        let mathStyle = includeMath
+            ? "<style>\(mathAssets.katexCSS)</style>"
+            : ""
+        let mathScript = includeMath
+            ? "<script>\(mathAssets.katexScript)</script>"
+            : ""
 
         return """
         <!doctype html>
@@ -10,32 +20,30 @@ enum ReaderHTMLTemplate {
         <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <style>
-                \(mathAssets.katexCSS)
-            </style>
+            \(mathStyle)
             <style>
                 :root {
                     color-scheme: light dark;
                     --reader-width: \(Int(settings.readingWidth))px;
                     --base-font-size: \(String(format: "%.1f", settings.baseFontSize))px;
-                    --viewport-padding-x: clamp(26px, 4vw, 56px);
-                    --viewport-padding-top: 56px;
-                    --viewport-padding-bottom: 96px;
+                    --viewport-padding-x: clamp(24px, 3.8vw, 52px);
+                    --viewport-padding-top: 40px;
+                    --viewport-padding-bottom: 88px;
                     --block-space: 1.18em;
                     --section-space: 2.12em;
-                    --page-bg: #f8f3ea;
-                    --page-bg-secondary: #f2ebdf;
-                    --page-grid: rgba(93, 74, 53, 0.035);
+                    --page-bg: #f7f2e8;
+                    --page-bg-secondary: #f1eadf;
+                    --page-grid: rgba(93, 74, 53, 0.03);
                     --text: #2c241d;
                     --muted: #786d61;
                     --border: rgba(82, 62, 42, 0.14);
                     --soft-border: rgba(82, 62, 42, 0.08);
-                    --surface-weak: rgba(251, 245, 237, 0.76);
-                    --surface-strong: rgba(244, 236, 226, 0.92);
-                    --blockquote-bg: rgba(164, 133, 95, 0.09);
-                    --code-bg: rgba(98, 78, 56, 0.075);
+                    --surface-weak: rgba(251, 245, 237, 0.74);
+                    --surface-strong: rgba(244, 236, 226, 0.9);
+                    --blockquote-bg: rgba(164, 133, 95, 0.08);
+                    --code-bg: rgba(98, 78, 56, 0.07);
                     --code-border: rgba(98, 78, 56, 0.11);
-                    --table-row: rgba(93, 73, 53, 0.032);
+                    --table-row: rgba(93, 73, 53, 0.03);
                     --accent: #8b6a46;
                     --accent-soft: rgba(139, 106, 70, 0.14);
                     --search-bg: rgba(228, 191, 112, 0.34);
@@ -44,19 +52,19 @@ enum ReaderHTMLTemplate {
 
                 @media (prefers-color-scheme: dark) {
                     :root {
-                        --page-bg: #17120f;
-                        --page-bg-secondary: #1d1713;
-                        --page-grid: rgba(241, 229, 214, 0.028);
+                        --page-bg: #1a1511;
+                        --page-bg-secondary: #201915;
+                        --page-grid: rgba(241, 229, 214, 0.025);
                         --text: #eee3d6;
                         --muted: #b3a391;
                         --border: rgba(238, 223, 204, 0.12);
                         --soft-border: rgba(238, 223, 204, 0.07);
-                        --surface-weak: rgba(255, 246, 234, 0.03);
-                        --surface-strong: rgba(255, 245, 231, 0.05);
-                        --blockquote-bg: rgba(201, 161, 107, 0.08);
-                        --code-bg: rgba(255, 243, 228, 0.05);
+                        --surface-weak: rgba(255, 246, 234, 0.028);
+                        --surface-strong: rgba(255, 245, 231, 0.048);
+                        --blockquote-bg: rgba(201, 161, 107, 0.075);
+                        --code-bg: rgba(255, 243, 228, 0.048);
                         --code-border: rgba(255, 243, 228, 0.085);
-                        --table-row: rgba(255, 243, 228, 0.026);
+                        --table-row: rgba(255, 243, 228, 0.024);
                         --accent: #d0aa79;
                         --accent-soft: rgba(208, 170, 121, 0.14);
                         --search-bg: rgba(196, 150, 74, 0.32);
@@ -70,11 +78,14 @@ enum ReaderHTMLTemplate {
 
                 html, body {
                     min-height: 100%;
+                    width: 100%;
+                    max-width: 100%;
+                    overflow-x: hidden;
                 }
 
                 html {
-                    scroll-behavior: smooth;
-                    background: var(--page-bg);
+                    background:
+                        linear-gradient(180deg, color-mix(in srgb, var(--page-bg-secondary) 70%, var(--page-bg) 30%) 0%, var(--page-bg) 18%, var(--page-bg) 100%);
                 }
 
                 body {
@@ -86,34 +97,49 @@ enum ReaderHTMLTemplate {
                     text-rendering: optimizeLegibility;
                     -webkit-font-smoothing: antialiased;
                     overflow-wrap: anywhere;
-                    background: var(--page-bg);
+                    background: transparent;
+                }
+
+                html.smooth-scroll {
+                    scroll-behavior: smooth;
                 }
 
                 main {
-                    width: min(100%, calc(var(--reader-width) + (var(--viewport-padding-x) * 2)));
-                    margin: 0 auto;
+                    width: 100%;
+                    max-width: 100%;
+                    margin: 0;
                     padding:
                         calc(var(--viewport-padding-top) + env(safe-area-inset-top, 0px))
-                        var(--viewport-padding-x)
+                        0
                         calc(var(--viewport-padding-bottom) + env(safe-area-inset-bottom, 0px));
-                    animation: fadeIn 180ms ease-out;
                 }
 
-                main > :first-child {
+                .reader-page {
+                    width: 100%;
+                    max-width: 100%;
+                    padding: 0 var(--viewport-padding-x);
+                }
+
+                .reader-content {
+                    width: min(100%, var(--reader-width));
+                    max-width: 100%;
+                    margin: 0 auto;
+                }
+
+                .reader-content > * {
+                    max-width: 100%;
+                }
+
+                .reader-content > :first-child {
                     margin-top: 0 !important;
                 }
 
-                main > :last-child {
+                .reader-content > :last-child {
                     margin-bottom: 0 !important;
                 }
 
-                main > :first-child:is(h1, h2, h3, h4, h5, h6) {
+                .reader-content > :first-child:is(h1, h2, h3, h4, h5, h6) {
                     padding-top: 0.08em;
-                }
-
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(6px); }
-                    to { opacity: 1; transform: translateY(0); }
                 }
 
                 h1, h2, h3, h4, h5, h6 {
@@ -171,11 +197,11 @@ enum ReaderHTMLTemplate {
                 }
 
                 blockquote {
-                    padding: 0.42em 0 0.42em 1.18em;
+                    padding: 0.4em 0 0.4em 1.18em;
                     border-left: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
                     background: var(--blockquote-bg);
-                    border-radius: 0 16px 16px 0;
-                    margin: 1.34em 0 1.42em;
+                    border-radius: 0 14px 14px 0;
+                    margin: 1.3em 0 1.38em;
                 }
 
                 blockquote > :first-child {
@@ -235,16 +261,21 @@ enum ReaderHTMLTemplate {
                 }
 
                 pre.code-block {
-                    overflow: auto;
+                    width: 100%;
+                    max-width: 100%;
+                    overflow-x: auto;
+                    overflow-y: hidden;
                     padding: 18px 20px;
-                    background: color-mix(in srgb, var(--code-bg) 92%, var(--page-bg) 8%);
+                    background: color-mix(in srgb, var(--code-bg) 94%, var(--page-bg) 6%);
                     border: 1px solid var(--code-border);
-                    border-radius: 16px;
+                    border-radius: 14px;
                     margin: 1.3em 0 1.42em;
                 }
 
                 pre code {
                     display: block;
+                    width: max-content;
+                    min-width: 100%;
                     border: none;
                     background: transparent;
                     padding: 0;
@@ -260,17 +291,20 @@ enum ReaderHTMLTemplate {
                 }
 
                 .table-wrap {
+                    width: 100%;
+                    max-width: 100%;
                     overflow-x: auto;
+                    overflow-y: hidden;
                     border: 1px solid var(--soft-border);
-                    border-radius: 16px;
-                    background: color-mix(in srgb, var(--surface-strong) 88%, var(--page-bg) 12%);
+                    border-radius: 14px;
+                    background: color-mix(in srgb, var(--surface-strong) 90%, var(--page-bg) 10%);
                     margin: 1.28em 0 1.4em;
                 }
 
                 table {
-                    width: 100%;
+                    width: max-content;
+                    min-width: 100%;
                     border-collapse: collapse;
-                    min-width: 460px;
                 }
 
                 thead th {
@@ -298,7 +332,7 @@ enum ReaderHTMLTemplate {
                     border-radius: 16px;
                     display: block;
                     margin: 1.2em auto;
-                    box-shadow: 0 10px 24px rgba(59, 45, 33, 0.08);
+                    box-shadow: 0 10px 22px rgba(59, 45, 33, 0.07);
                 }
 
                 .inline-image {
@@ -307,7 +341,7 @@ enum ReaderHTMLTemplate {
 
                 .details-block details {
                     border: 1px solid var(--soft-border);
-                    border-radius: 16px;
+                    border-radius: 14px;
                     padding: 14px 18px;
                     background: color-mix(in srgb, var(--surface-strong) 92%, var(--page-bg) 8%);
                 }
@@ -330,8 +364,11 @@ enum ReaderHTMLTemplate {
                 }
 
                 .math-block-source {
+                    width: 100%;
+                    max-width: 100%;
                     white-space: pre-wrap;
                     overflow-x: auto;
+                    overflow-y: hidden;
                     margin: 1.5em 0 1.62em;
                 }
 
@@ -340,10 +377,12 @@ enum ReaderHTMLTemplate {
                 }
 
                 .katex-display {
+                    width: 100%;
+                    max-width: 100%;
                     margin: 1.78em 0 1.92em;
                     overflow-x: auto;
                     overflow-y: hidden;
-                    padding: 0.32em 0.24em 0.62em;
+                    padding: 0.28em 0 0.58em;
                     scrollbar-gutter: stable both-edges;
                 }
 
@@ -382,9 +421,10 @@ enum ReaderHTMLTemplate {
                 }
 
                 @media (max-width: 880px) {
-                    main {
-                        width: 100%;
-                        padding: 38px 20px 72px;
+                    :root {
+                        --viewport-padding-x: 20px;
+                        --viewport-padding-top: 30px;
+                        --viewport-padding-bottom: 72px;
                     }
 
                     h1 { font-size: 2.05em; }
@@ -393,16 +433,18 @@ enum ReaderHTMLTemplate {
             </style>
         </head>
         <body>
-            <main id="reader-root">
-                \(bodyHTML)
+            <main>
+                <div class="reader-page">
+                    <article id="reader-root" class="reader-content">
+                        \(bodyHTML)
+                    </article>
+                </div>
             </main>
-            <script>
-                \(mathAssets.katexScript)
-            </script>
+            \(mathScript)
             <script>
                 const headingSelector = '#reader-root h1[id], #reader-root h2[id], #reader-root h3[id], #reader-root h4[id], #reader-root h5[id], #reader-root h6[id]';
-                const progressMinDelta = 0.003;
-                const progressMinIntervalMs = 50;
+                const scrollPostIntervalMs = 90;
+                const scrollSettleDelayMs = 140;
 
                 const readerState = {
                     matches: [],
@@ -410,10 +452,26 @@ enum ReaderHTMLTemplate {
                     activeHeadingId: null,
                     headings: [],
                     headingOffsets: [],
-                    lastProgress: -1,
-                    lastProgressPostAt: 0,
-                    statePostScheduled: false
+                    lastProgressPercent: -1,
+                    metricsDirty: true,
+                    cachedMaxScroll: 0,
+                    statePostScheduled: false,
+                    pendingForcedPost: false,
+                    lastStatePostTimestamp: 0,
+                    settlePostTimer: null
                 };
+
+                function recomputeScrollMetrics() {
+                    readerState.cachedMaxScroll = Math.max(
+                        0,
+                        document.documentElement.scrollHeight - window.innerHeight
+                    );
+                    readerState.metricsDirty = false;
+                }
+
+                function markMetricsDirty() {
+                    readerState.metricsDirty = true;
+                }
 
                 function refreshHeadingCache() {
                     readerState.headings = Array.from(document.querySelectorAll(headingSelector));
@@ -422,9 +480,36 @@ enum ReaderHTMLTemplate {
 
                 function refreshHeadingOffsets() {
                     readerState.headingOffsets = readerState.headings.map((heading) => heading.offsetTop);
+                    markMetricsDirty();
                 }
 
-                function scheduleReaderStatePost() {
+                function clearScheduledSettlePost() {
+                    if (readerState.settlePostTimer !== null) {
+                        window.clearTimeout(readerState.settlePostTimer);
+                        readerState.settlePostTimer = null;
+                    }
+                }
+
+                function postReaderStateNow() {
+                    postProgress();
+                    postActiveHeading();
+                    readerState.lastStatePostTimestamp = performance.now();
+                }
+
+                function scheduleSettlePost(delay = scrollSettleDelayMs) {
+                    clearScheduledSettlePost();
+                    readerState.settlePostTimer = window.setTimeout(() => {
+                        readerState.settlePostTimer = null;
+                        if (readerState.statePostScheduled) {
+                            scheduleReaderStatePost(true);
+                            return;
+                        }
+                        postReaderStateNow();
+                    }, delay);
+                }
+
+                function scheduleReaderStatePost(force = false) {
+                    readerState.pendingForcedPost = readerState.pendingForcedPost || force;
                     if (readerState.statePostScheduled) {
                         return;
                     }
@@ -432,26 +517,36 @@ enum ReaderHTMLTemplate {
                     readerState.statePostScheduled = true;
                     requestAnimationFrame(() => {
                         readerState.statePostScheduled = false;
-                        postReaderState();
+
+                        const shouldForce = readerState.pendingForcedPost;
+                        readerState.pendingForcedPost = false;
+
+                        const now = performance.now();
+                        const enoughTimeElapsed = now - readerState.lastStatePostTimestamp >= scrollPostIntervalMs;
+                        if (shouldForce || enoughTimeElapsed) {
+                            clearScheduledSettlePost();
+                            postReaderStateNow();
+                        }
                     });
                 }
 
                 function postProgress() {
-                    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-                    const progress = maxScroll <= 0 ? 0 : window.scrollY / maxScroll;
-                    const now = performance.now();
-                    const progressChanged = Math.abs(progress - readerState.lastProgress) >= progressMinDelta;
-                    const enoughTimeElapsed = (now - readerState.lastProgressPostAt) >= progressMinIntervalMs;
+                    if (readerState.metricsDirty) {
+                        recomputeScrollMetrics();
+                    }
 
-                    if (readerState.lastProgress >= 0 && !progressChanged && !enoughTimeElapsed && progress !== 0 && progress !== 1) {
+                    const maxScroll = readerState.cachedMaxScroll;
+                    const ratio = maxScroll <= 0 ? 0 : window.scrollY / maxScroll;
+                    const percent = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+
+                    if (percent === readerState.lastProgressPercent) {
                         return;
                     }
 
-                    readerState.lastProgress = progress;
-                    readerState.lastProgressPostAt = now;
+                    readerState.lastProgressPercent = percent;
 
                     if (window.webkit?.messageHandlers?.readerProgress) {
-                        window.webkit.messageHandlers.readerProgress.postMessage(progress);
+                        window.webkit.messageHandlers.readerProgress.postMessage(percent / 100);
                     }
                 }
 
@@ -468,7 +563,7 @@ enum ReaderHTMLTemplate {
                     let bestIndex = 0;
 
                     while (lowerBound <= upperBound) {
-                        const midpoint = Math.floor((lowerBound + upperBound) / 2);
+                        const midpoint = (lowerBound + upperBound) >> 1;
                         if (offsets[midpoint] <= targetOffset) {
                             bestIndex = midpoint;
                             lowerBound = midpoint + 1;
@@ -492,17 +587,14 @@ enum ReaderHTMLTemplate {
                     }
                 }
 
-                function postReaderState() {
-                    postProgress();
-                    postActiveHeading();
-                }
-
                 function applyDisplaySettings(fontSize, width) {
                     document.documentElement.style.setProperty('--base-font-size', `${fontSize}px`);
                     document.documentElement.style.setProperty('--reader-width', `${width}px`);
                     requestAnimationFrame(() => {
+                        markMetricsDirty();
                         refreshHeadingOffsets();
-                        scheduleReaderStatePost();
+                        scheduleReaderStatePost(true);
+                        scheduleSettlePost(0);
                     });
                 }
 
@@ -587,6 +679,18 @@ enum ReaderHTMLTemplate {
                     return matches;
                 }
 
+                function withSmoothScroll(action) {
+                    const root = document.documentElement;
+                    root.classList.add('smooth-scroll');
+                    try {
+                        action();
+                    } finally {
+                        window.setTimeout(() => {
+                            root.classList.remove('smooth-scroll');
+                        }, 600);
+                    }
+                }
+
                 function updateCurrentSearchResult(scrollIntoView = true) {
                     readerState.matches.forEach((mark, index) => {
                         mark.classList.toggle('current', index === readerState.currentMatchIndex - 1);
@@ -594,15 +698,22 @@ enum ReaderHTMLTemplate {
 
                     const current = readerState.matches[readerState.currentMatchIndex - 1];
                     if (scrollIntoView && current) {
-                        current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        withSmoothScroll(() => {
+                            current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        });
+                        scheduleSettlePost();
                     }
 
+                    markMetricsDirty();
+                    scheduleReaderStatePost(true);
                     return { count: readerState.matches.length, current: readerState.currentMatchIndex };
                 }
 
                 function performSearch(query) {
                     clearSearchHighlights();
                     if (!query) {
+                        markMetricsDirty();
+                        scheduleReaderStatePost(true);
                         return { count: 0, current: 0 };
                     }
 
@@ -626,7 +737,7 @@ enum ReaderHTMLTemplate {
                     }
 
                     readerState.currentMatchIndex = readerState.matches.length > 0 ? 1 : 0;
-                    scheduleReaderStatePost();
+                    markMetricsDirty();
                     return updateCurrentSearchResult();
                 }
 
@@ -644,7 +755,10 @@ enum ReaderHTMLTemplate {
                 function scrollToAnchor(anchor) {
                     const element = document.getElementById(anchor);
                     if (element) {
-                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        withSmoothScroll(() => {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        });
+                        scheduleSettlePost();
                         return true;
                     }
                     return false;
@@ -657,21 +771,45 @@ enum ReaderHTMLTemplate {
                     scrollToAnchor
                 };
 
-                window.addEventListener('load', () => {
+                function initialize() {
                     renderMath();
                     refreshHeadingCache();
-                    postReaderState();
+                    recomputeScrollMetrics();
+                    postReaderStateNow();
 
                     requestAnimationFrame(() => {
                         refreshHeadingOffsets();
-                        postReaderState();
+                        recomputeScrollMetrics();
+                        postReaderStateNow();
                     });
-                });
-                window.addEventListener('scroll', scheduleReaderStatePost, { passive: true });
-                window.addEventListener('resize', () => {
-                    refreshHeadingOffsets();
+                }
+
+                if (document.readyState === 'complete') {
+                    initialize();
+                } else {
+                    window.addEventListener('load', initialize, { once: true });
+                }
+
+                window.addEventListener('scroll', () => {
                     scheduleReaderStatePost();
+                    scheduleSettlePost();
                 }, { passive: true });
+                window.addEventListener('resize', () => {
+                    markMetricsDirty();
+                    refreshHeadingOffsets();
+                    scheduleReaderStatePost(true);
+                    scheduleSettlePost();
+                }, { passive: true });
+
+                if (typeof ResizeObserver === 'function') {
+                    const bodyObserver = new ResizeObserver(() => {
+                        markMetricsDirty();
+                        refreshHeadingOffsets();
+                        scheduleReaderStatePost(true);
+                        scheduleSettlePost();
+                    });
+                    bodyObserver.observe(document.documentElement);
+                }
             </script>
         </body>
         </html>

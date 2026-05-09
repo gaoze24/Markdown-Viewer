@@ -5,20 +5,35 @@ struct RecentFileRemoveButton: View {
     let isVisible: Bool
     let action: () -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12.5, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(AppTheme.tertiaryText)
+                .foregroundStyle(iconForeground)
+                .frame(width: 26, height: 26)
+                .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .help("Remove from Recents")
         .accessibilityLabel("Remove from Recents")
-        .opacity(isVisible ? 0.92 : 0)
-        .scaleEffect(isVisible ? 1 : 0.92)
-        .allowsHitTesting(isVisible)
+        .opacity(isVisible ? 0.96 : 0.45)
+        .scaleEffect(isVisible || isHovered ? 1 : 0.96)
         .animation(.easeOut(duration: 0.14), value: isVisible)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+
+    private var backgroundStyle: Color {
+        isHovered ? AppTheme.controlHoverFill : AppTheme.controlSubtleFill
+    }
+
+    private var iconForeground: Color {
+        isHovered ? AppTheme.primaryText : AppTheme.tertiaryText
     }
 }
 

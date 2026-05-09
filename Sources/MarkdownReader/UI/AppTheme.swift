@@ -4,8 +4,8 @@ import SwiftUI
 enum AppTheme {
     static let tint = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B)
     static let windowBackground = dynamicColor(light: 0xF5F0E7, dark: 0x17120F)
-    static let detailBackground = dynamicColor(light: 0xFAF6EE, dark: 0x1B1612)
-    static let sidebarBackground = dynamicColor(light: 0xEDE4D7, dark: 0x14100D)
+    static let detailBackground = dynamicColor(light: 0xF7F2E8, dark: 0x1A1511)
+    static let sidebarBackground = dynamicColor(light: 0xEEE5D9, dark: 0x15110E)
     static let surface = dynamicColor(light: 0xF4EDE1, dark: 0x241D18)
     static let elevatedSurface = dynamicColor(light: 0xF8F2E7, dark: 0x28211B)
     static let chromeSurface = dynamicColor(light: 0xF2EADD, dark: 0x221B16)
@@ -20,6 +20,9 @@ enum AppTheme {
     static let warning = dynamicColor(light: 0xB16F49, dark: 0xD79267)
     static let subtleAccentFill = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.08, darkAlpha: 0.12)
     static let subtleAccentBorder = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.22, darkAlpha: 0.24)
+    static let controlHoverFill = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.10, darkAlpha: 0.15)
+    static let controlHoverBorder = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.18, darkAlpha: 0.20)
+    static let controlSubtleFill = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.05, darkAlpha: 0.08)
 
     static func outlineAccent(for level: Int) -> Color {
         switch level {
