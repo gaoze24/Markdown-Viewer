@@ -36,8 +36,6 @@ struct OutlineRowItem: Identifiable, Equatable {
     let heading: TableOfContentsItem
     let depth: Int
     let isExpanded: Bool
-    let isActive: Bool
-    let hasActiveDescendant: Bool
 
     var id: String {
         heading.id
@@ -57,6 +55,145 @@ struct OutlineRowItem: Identifiable, Equatable {
 }
 
 @MainActor
+final class ReaderViewportState: ObservableObject {
+    @Published private(set) var scrollProgress = 0.0
+    @Published private(set) var activeHeadingID: String?
+    @Published private(set) var activePathIDs: Set<String> = []
+
+    private var lastReportedScrollPercent: Int = -1
+    private var pendingProgrammaticHeadingID: String?
+    private var programmaticHeadingUnlockTask: Task<Void, Never>?
+
+    func requestProgrammaticNavigation(to headingID: String, ancestorIDs: [String]) {
+        pendingProgrammaticHeadingID = headingID
+        setActiveHeading(headingID, ancestorIDs: ancestorIDs)
+        programmaticHeadingUnlockTask?.cancel()
+        programmaticHeadingUnlockTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self, self.pendingProgrammaticHeadingID == headingID else { return }
+                self.clearProgrammaticNavigationLock()
+            }
+        }
+    }
+
+    func acceptObservedHeading(_ headingID: String?, ancestorIDs: [String]) -> Bool {
+        if let pendingProgrammaticHeadingID {
+            if headingID == pendingProgrammaticHeadingID {
+                clearProgrammaticNavigationLock()
+            } else {
+                return false
+            }
+        }
+
+        return setActiveHeading(headingID, ancestorIDs: ancestorIDs)
+    }
+
+    func updateScrollProgress(_ progress: Double) {
+        let clamped = min(max(progress, 0), 1)
+        let percent = Int((clamped * 100).rounded())
+        guard percent != lastReportedScrollPercent else { return }
+        lastReportedScrollPercent = percent
+        scrollProgress = Double(percent) / 100
+    }
+
+    func reset() {
+        lastReportedScrollPercent = -1
+        scrollProgress = 0
+        clearProgrammaticNavigationLock()
+        _ = setActiveHeading(nil, ancestorIDs: [])
+    }
+
+    @discardableResult
+    func setActiveHeading(_ headingID: String?, ancestorIDs: [String]) -> Bool {
+        let nextPathIDs = Set(ancestorIDs + (headingID.map { [$0] } ?? []))
+        guard headingID != activeHeadingID || nextPathIDs != activePathIDs else { return false }
+        activeHeadingID = headingID
+        activePathIDs = nextPathIDs
+        return true
+    }
+
+    private func clearProgrammaticNavigationLock() {
+        pendingProgrammaticHeadingID = nil
+        programmaticHeadingUnlockTask?.cancel()
+        programmaticHeadingUnlockTask = nil
+    }
+}
+
+@MainActor
+final class ReaderSearchState: ObservableObject {
+    private static let searchDebounceNanoseconds: UInt64 = 140_000_000
+
+    @Published var searchQuery = ""
+    @Published private(set) var debouncedSearchQuery = ""
+    @Published private(set) var searchResultCount = 0
+    @Published private(set) var currentSearchResult = 0
+    @Published var searchNavigationRequest: SearchNavigationRequest?
+    @Published var anchorNavigationRequest: AnchorNavigationRequest?
+    @Published private(set) var searchFocusToken = UUID()
+
+    private var searchDebounceTask: Task<Void, Never>?
+    private var lastSearchQueryForDebounce = ""
+
+    func requestSearchFocus() {
+        searchFocusToken = UUID()
+    }
+
+    func searchNext() {
+        guard !searchQuery.isEmpty else { return }
+        searchNavigationRequest = SearchNavigationRequest(direction: .next)
+    }
+
+    func searchPrevious() {
+        guard !searchQuery.isEmpty else { return }
+        searchNavigationRequest = SearchNavigationRequest(direction: .previous)
+    }
+
+    func updateSearchResults(count: Int, currentIndex: Int) {
+        searchResultCount = count
+        currentSearchResult = currentIndex
+    }
+
+    func requestAnchorNavigation(_ anchor: String) {
+        anchorNavigationRequest = AnchorNavigationRequest(anchor: anchor)
+    }
+
+    func scheduleSearchDebounce(for nextValue: String) {
+        guard nextValue != lastSearchQueryForDebounce else { return }
+        lastSearchQueryForDebounce = nextValue
+
+        searchDebounceTask?.cancel()
+
+        if nextValue.isEmpty {
+            debouncedSearchQuery = ""
+            return
+        }
+
+        searchDebounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: ReaderSearchState.searchDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                guard self.searchQuery == nextValue else { return }
+                self.debouncedSearchQuery = nextValue
+            }
+        }
+    }
+
+    func reset() {
+        searchDebounceTask?.cancel()
+        lastSearchQueryForDebounce = ""
+        searchQuery = ""
+        debouncedSearchQuery = ""
+        searchResultCount = 0
+        currentSearchResult = 0
+        searchNavigationRequest = nil
+        anchorNavigationRequest = nil
+    }
+}
+
+@MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var renderedDocument: RenderedDocument?
     @Published private(set) var currentFileURL: URL?
@@ -69,17 +206,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var loadErrorMessage: String?
     @Published private(set) var availabilityMessage: String?
-    @Published var searchQuery = ""
-    /// Debounced mirror of `searchQuery`. Bound to the WebView's `performSearch`
-    /// so we do not walk the entire document on every keystroke.
-    @Published private(set) var debouncedSearchQuery: String = ""
-    @Published private(set) var searchResultCount = 0
-    @Published private(set) var currentSearchResult = 0
-    @Published private(set) var scrollProgress = 0.0
-    @Published private(set) var activeHeadingID: String?
-    @Published var searchNavigationRequest: SearchNavigationRequest?
-    @Published var anchorNavigationRequest: AnchorNavigationRequest?
-    @Published private(set) var searchFocusToken = UUID()
+
+    let viewportState = ReaderViewportState()
+    let searchState = ReaderSearchState()
 
     var windowTitle: String {
         renderedDocument?.title ?? currentFileURL?.lastPathComponent ?? "Markdown Reader"
@@ -123,26 +252,10 @@ final class AppModel: ObservableObject {
     private let renderer = MarkdownRenderer()
     private let recentStore = RecentFilesStore()
     private let watcher = FileWatcher()
-    private static let searchDebounceNanoseconds: UInt64 = 140_000_000
     private var loadTask: Task<Void, Never>?
-    private var searchDebounceTask: Task<Void, Never>?
     private var pendingBootstrap = false
     private var outlineExpandedIDsByDocument: [String: Set<String>] = [:]
     private var outlineParentByID: [String: String] = [:]
-    private var lastReportedScrollPercent: Int = -1
-    private var lastSearchQueryForDebounce: String = ""
-    private var pendingProgrammaticHeadingID: String?
-    private var programmaticHeadingUnlockTask: Task<Void, Never>?
-    private var cancellables: Set<AnyCancellable> = []
-
-    init() {
-        $searchQuery
-            .removeDuplicates()
-            .sink { [weak self] newValue in
-                self?.scheduleSearchDebounce(for: newValue)
-            }
-            .store(in: &cancellables)
-    }
 
     func bootstrapIfNeeded() {
         guard !pendingBootstrap else { return }
@@ -152,29 +265,25 @@ final class AppModel: ObservableObject {
     }
 
     func requestSearchFocus() {
-        searchFocusToken = UUID()
+        searchState.requestSearchFocus()
     }
 
     func searchNext() {
-        guard !searchQuery.isEmpty else { return }
-        searchNavigationRequest = SearchNavigationRequest(direction: .next)
+        searchState.searchNext()
     }
 
     func searchPrevious() {
-        guard !searchQuery.isEmpty else { return }
-        searchNavigationRequest = SearchNavigationRequest(direction: .previous)
+        searchState.searchPrevious()
     }
 
     func jumpToHeading(_ heading: TableOfContentsItem) {
-        lockProgrammaticHeadingSelection(to: heading.id)
-        activeHeadingID = heading.id
+        let ancestorIDs = ancestorIDs(for: heading.id)
+        viewportState.requestProgrammaticNavigation(to: heading.id, ancestorIDs: ancestorIDs)
         let didExpandAncestors = expandAncestors(of: heading.id)
         if didExpandAncestors {
             refreshOutlineRows()
-        } else {
-            refreshOutlineHighlightState()
         }
-        anchorNavigationRequest = AnchorNavigationRequest(anchor: heading.id)
+        searchState.requestAnchorNavigation(heading.id)
     }
 
     func toggleOutlineExpansion(for heading: TableOfContentsItem) {
@@ -201,80 +310,26 @@ final class AppModel: ObservableObject {
     }
 
     func updateSearchResults(count: Int, currentIndex: Int) {
-        searchResultCount = count
-        currentSearchResult = currentIndex
+        searchState.updateSearchResults(count: count, currentIndex: currentIndex)
     }
 
     func updateScrollProgress(_ progress: Double) {
-        let clamped = min(max(progress, 0), 1)
-        let percent = Int((clamped * 100).rounded())
-        guard percent != lastReportedScrollPercent else { return }
-        lastReportedScrollPercent = percent
-        scrollProgress = Double(percent) / 100
+        viewportState.updateScrollProgress(progress)
     }
 
-    /// Schedule a debounced update of `debouncedSearchQuery` so the WebView
-    /// only re-runs `performSearch` once typing pauses.
-    func scheduleSearchDebounce(for nextValue: String) {
-        guard nextValue != lastSearchQueryForDebounce else { return }
-        lastSearchQueryForDebounce = nextValue
-
-        searchDebounceTask?.cancel()
-
-        // Empty queries clear immediately so highlights vanish without lag.
-        if nextValue.isEmpty {
-            debouncedSearchQuery = ""
-            return
-        }
-
-        searchDebounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: AppModel.searchDebounceNanoseconds)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                guard let self else { return }
-                guard self.searchQuery == nextValue else { return }
-                self.debouncedSearchQuery = nextValue
-            }
-        }
+    func updateSearchQuery(_ nextValue: String) {
+        guard searchState.searchQuery != nextValue else { return }
+        searchState.searchQuery = nextValue
+        searchState.scheduleSearchDebounce(for: nextValue)
     }
 
     func updateActiveHeading(_ headingID: String?) {
-        if let pendingProgrammaticHeadingID {
-            if headingID == pendingProgrammaticHeadingID {
-                unlockProgrammaticHeadingSelection()
-            } else {
-                return
-            }
-        }
+        let ancestorIDs = ancestorIDs(for: headingID)
+        guard viewportState.acceptObservedHeading(headingID, ancestorIDs: ancestorIDs) else { return }
 
-        guard headingID != activeHeadingID else { return }
-        activeHeadingID = headingID
-        let didExpandAncestors = expandAncestors(of: headingID)
-
-        if didExpandAncestors {
+        if expandAncestors(of: headingID) {
             refreshOutlineRows()
-        } else {
-            refreshOutlineHighlightState()
         }
-    }
-
-    private func lockProgrammaticHeadingSelection(to headingID: String) {
-        pendingProgrammaticHeadingID = headingID
-        programmaticHeadingUnlockTask?.cancel()
-        programmaticHeadingUnlockTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                guard let self, self.pendingProgrammaticHeadingID == headingID else { return }
-                self.unlockProgrammaticHeadingSelection()
-            }
-        }
-    }
-
-    private func unlockProgrammaticHeadingSelection() {
-        pendingProgrammaticHeadingID = nil
-        programmaticHeadingUnlockTask?.cancel()
-        programmaticHeadingUnlockTask = nil
     }
 
     func openPanel() {
@@ -366,10 +421,8 @@ final class AppModel: ObservableObject {
         availabilityMessage = nil
         currentFileURL = standardized
         isLoading = true
-        searchQuery = ""
-        searchResultCount = 0
-        currentSearchResult = 0
-        scrollProgress = 0
+        searchState.reset()
+        viewportState.reset()
 
         if addToRecentFiles {
             recentStore.record(url: standardized)
@@ -440,8 +493,10 @@ final class AppModel: ObservableObject {
             .intersection(Self.expandableOutlineIDs(in: renderedDocument.tableOfContents))
 
         outlineExpandedIDsByDocument[documentKey] = sanitizedExpandedIDs
-        activeHeadingID = renderedDocument.tableOfContents.first?.id
-        expandAncestors(of: activeHeadingID)
+        let initialHeadingID = renderedDocument.tableOfContents.first?.id
+        let initialAncestorIDs = ancestorIDs(for: initialHeadingID)
+        viewportState.setActiveHeading(initialHeadingID, ancestorIDs: initialAncestorIDs)
+        expandAncestors(of: initialHeadingID)
         refreshOutlineRows()
     }
 
@@ -453,46 +508,11 @@ final class AppModel: ObservableObject {
             return
         }
 
-        let activePath = Set(ancestorIDs(for: activeHeadingID) + (activeHeadingID.map { [$0] } ?? []))
         outlineRows = Self.makeOutlineRows(
             from: renderedDocument.tableOfContents,
-            expandedIDs: currentOutlineExpandedIDs(),
-            activeHeadingID: activeHeadingID,
-            activePath: activePath
+            expandedIDs: currentOutlineExpandedIDs()
         )
         outlineStructureToken &+= 1
-    }
-
-    private func refreshOutlineHighlightState() {
-        guard !outlineRows.isEmpty else {
-            refreshOutlineRows()
-            return
-        }
-
-        let activePath = Set(ancestorIDs(for: activeHeadingID) + (activeHeadingID.map { [$0] } ?? []))
-        var hasChanges = false
-
-        let updatedRows = outlineRows.map { row in
-            let isActive = row.heading.id == activeHeadingID
-            let hasActiveDescendant = row.heading.id != activeHeadingID && activePath.contains(row.heading.id)
-
-            if isActive == row.isActive, hasActiveDescendant == row.hasActiveDescendant {
-                return row
-            }
-
-            hasChanges = true
-            return OutlineRowItem(
-                heading: row.heading,
-                depth: row.depth,
-                isExpanded: row.isExpanded,
-                isActive: isActive,
-                hasActiveDescendant: hasActiveDescendant
-            )
-        }
-
-        if hasChanges {
-            outlineRows = updatedRows
-        }
     }
 
     private func currentOutlineExpandedIDs() -> Set<String> {
@@ -538,8 +558,6 @@ final class AppModel: ObservableObject {
     private static func makeOutlineRows(
         from headings: [TableOfContentsItem],
         expandedIDs: Set<String>,
-        activeHeadingID: String?,
-        activePath: Set<String>,
         depth: Int = 0
     ) -> [OutlineRowItem] {
         headings.flatMap { heading -> [OutlineRowItem] in
@@ -547,9 +565,7 @@ final class AppModel: ObservableObject {
             let row = OutlineRowItem(
                 heading: heading,
                 depth: depth,
-                isExpanded: isExpanded,
-                isActive: heading.id == activeHeadingID,
-                hasActiveDescendant: heading.id != activeHeadingID && activePath.contains(heading.id)
+                isExpanded: isExpanded
             )
 
             guard heading.hasChildren, isExpanded else {
@@ -559,8 +575,6 @@ final class AppModel: ObservableObject {
             return [row] + makeOutlineRows(
                 from: heading.children,
                 expandedIDs: expandedIDs,
-                activeHeadingID: activeHeadingID,
-                activePath: activePath,
                 depth: depth + 1
             )
         }

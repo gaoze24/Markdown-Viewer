@@ -443,8 +443,11 @@ enum ReaderHTMLTemplate {
             \(mathScript)
             <script>
                 const headingSelector = '#reader-root h1[id], #reader-root h2[id], #reader-root h3[id], #reader-root h4[id], #reader-root h5[id], #reader-root h6[id]';
-                const scrollPostIntervalMs = 90;
+                const scrollProgressPostIntervalMs = 90;
+                const scrollHeadingPostIntervalMs = 120;
                 const scrollSettleDelayMs = 140;
+                const headingActivationOffset = 120;
+                const headingSwitchDeadband = 14;
 
                 const readerState = {
                     matches: [],
@@ -454,10 +457,14 @@ enum ReaderHTMLTemplate {
                     headingOffsets: [],
                     lastProgressPercent: -1,
                     metricsDirty: true,
+                    headingsDirty: true,
                     cachedMaxScroll: 0,
-                    statePostScheduled: false,
-                    pendingForcedPost: false,
-                    lastStatePostTimestamp: 0,
+                    progressPostScheduled: false,
+                    headingPostScheduled: false,
+                    pendingForcedProgressPost: false,
+                    pendingForcedHeadingPost: false,
+                    lastProgressPostTimestamp: 0,
+                    lastHeadingPostTimestamp: 0,
                     settlePostTimer: null
                 };
 
@@ -473,13 +480,22 @@ enum ReaderHTMLTemplate {
                     readerState.metricsDirty = true;
                 }
 
-                function refreshHeadingCache() {
-                    readerState.headings = Array.from(document.querySelectorAll(headingSelector));
-                    refreshHeadingOffsets();
+                function markHeadingsDirty() {
+                    readerState.headingsDirty = true;
                 }
 
-                function refreshHeadingOffsets() {
+                function refreshHeadingCache() {
+                    readerState.headings = Array.from(document.querySelectorAll(headingSelector));
+                    markHeadingsDirty();
+                    refreshHeadingOffsetsIfNeeded();
+                }
+
+                function refreshHeadingOffsetsIfNeeded() {
+                    if (!readerState.headingsDirty) {
+                        return;
+                    }
                     readerState.headingOffsets = readerState.headings.map((heading) => heading.offsetTop);
+                    readerState.headingsDirty = false;
                     markMetricsDirty();
                 }
 
@@ -490,42 +506,70 @@ enum ReaderHTMLTemplate {
                     }
                 }
 
-                function postReaderStateNow() {
+                function postProgressNow() {
                     postProgress();
+                    readerState.lastProgressPostTimestamp = performance.now();
+                }
+
+                function postHeadingNow() {
                     postActiveHeading();
-                    readerState.lastStatePostTimestamp = performance.now();
+                    readerState.lastHeadingPostTimestamp = performance.now();
                 }
 
                 function scheduleSettlePost(delay = scrollSettleDelayMs) {
                     clearScheduledSettlePost();
                     readerState.settlePostTimer = window.setTimeout(() => {
                         readerState.settlePostTimer = null;
-                        if (readerState.statePostScheduled) {
-                            scheduleReaderStatePost(true);
+                        if (readerState.progressPostScheduled || readerState.headingPostScheduled) {
+                            scheduleProgressPost(true);
+                            scheduleHeadingPost(true);
                             return;
                         }
-                        postReaderStateNow();
+                        postProgressNow();
+                        postHeadingNow();
                     }, delay);
                 }
 
-                function scheduleReaderStatePost(force = false) {
-                    readerState.pendingForcedPost = readerState.pendingForcedPost || force;
-                    if (readerState.statePostScheduled) {
+                function scheduleProgressPost(force = false) {
+                    readerState.pendingForcedProgressPost = readerState.pendingForcedProgressPost || force;
+                    if (readerState.progressPostScheduled) {
                         return;
                     }
 
-                    readerState.statePostScheduled = true;
+                    readerState.progressPostScheduled = true;
                     requestAnimationFrame(() => {
-                        readerState.statePostScheduled = false;
+                        readerState.progressPostScheduled = false;
 
-                        const shouldForce = readerState.pendingForcedPost;
-                        readerState.pendingForcedPost = false;
+                        const shouldForce = readerState.pendingForcedProgressPost;
+                        readerState.pendingForcedProgressPost = false;
 
                         const now = performance.now();
-                        const enoughTimeElapsed = now - readerState.lastStatePostTimestamp >= scrollPostIntervalMs;
+                        const enoughTimeElapsed = now - readerState.lastProgressPostTimestamp >= scrollProgressPostIntervalMs;
                         if (shouldForce || enoughTimeElapsed) {
                             clearScheduledSettlePost();
-                            postReaderStateNow();
+                            postProgressNow();
+                        }
+                    });
+                }
+
+                function scheduleHeadingPost(force = false) {
+                    readerState.pendingForcedHeadingPost = readerState.pendingForcedHeadingPost || force;
+                    if (readerState.headingPostScheduled) {
+                        return;
+                    }
+
+                    readerState.headingPostScheduled = true;
+                    requestAnimationFrame(() => {
+                        readerState.headingPostScheduled = false;
+
+                        const shouldForce = readerState.pendingForcedHeadingPost;
+                        readerState.pendingForcedHeadingPost = false;
+
+                        const now = performance.now();
+                        const enoughTimeElapsed = now - readerState.lastHeadingPostTimestamp >= scrollHeadingPostIntervalMs;
+                        if (shouldForce || enoughTimeElapsed) {
+                            clearScheduledSettlePost();
+                            postHeadingNow();
                         }
                     });
                 }
@@ -556,8 +600,10 @@ enum ReaderHTMLTemplate {
                         return null;
                     }
 
-                    const targetOffset = window.scrollY + 120;
+                    refreshHeadingOffsetsIfNeeded();
+
                     const offsets = readerState.headingOffsets;
+                    const targetOffset = window.scrollY + headingActivationOffset;
                     let lowerBound = 0;
                     let upperBound = offsets.length - 1;
                     let bestIndex = 0;
@@ -569,6 +615,18 @@ enum ReaderHTMLTemplate {
                             lowerBound = midpoint + 1;
                         } else {
                             upperBound = midpoint - 1;
+                        }
+                    }
+
+                    const currentIndex = readerState.activeHeadingId ? headings.findIndex((heading) => heading.id === readerState.activeHeadingId) : -1;
+                    if (currentIndex !== -1 && currentIndex !== bestIndex) {
+                        const currentOffset = offsets[currentIndex] ?? 0;
+                        const bestOffset = offsets[bestIndex] ?? 0;
+                        if (Math.abs(bestOffset - targetOffset) < headingSwitchDeadband) {
+                            return headings[currentIndex]?.id || null;
+                        }
+                        if (Math.abs(currentOffset - targetOffset) < headingSwitchDeadband) {
+                            return headings[currentIndex]?.id || null;
                         }
                     }
 
@@ -592,8 +650,9 @@ enum ReaderHTMLTemplate {
                     document.documentElement.style.setProperty('--reader-width', `${width}px`);
                     requestAnimationFrame(() => {
                         markMetricsDirty();
-                        refreshHeadingOffsets();
-                        scheduleReaderStatePost(true);
+                        markHeadingsDirty();
+                        scheduleProgressPost(true);
+                        scheduleHeadingPost(true);
                         scheduleSettlePost(0);
                     });
                 }
@@ -705,7 +764,9 @@ enum ReaderHTMLTemplate {
                     }
 
                     markMetricsDirty();
-                    scheduleReaderStatePost(true);
+                    markHeadingsDirty();
+                    scheduleProgressPost(true);
+                    scheduleHeadingPost(true);
                     return { count: readerState.matches.length, current: readerState.currentMatchIndex };
                 }
 
@@ -713,7 +774,9 @@ enum ReaderHTMLTemplate {
                     clearSearchHighlights();
                     if (!query) {
                         markMetricsDirty();
-                        scheduleReaderStatePost(true);
+                        markHeadingsDirty();
+                        scheduleProgressPost(true);
+                        scheduleHeadingPost(true);
                         return { count: 0, current: 0 };
                     }
 
@@ -738,6 +801,7 @@ enum ReaderHTMLTemplate {
 
                     readerState.currentMatchIndex = readerState.matches.length > 0 ? 1 : 0;
                     markMetricsDirty();
+                    markHeadingsDirty();
                     return updateCurrentSearchResult();
                 }
 
@@ -775,12 +839,14 @@ enum ReaderHTMLTemplate {
                     renderMath();
                     refreshHeadingCache();
                     recomputeScrollMetrics();
-                    postReaderStateNow();
+                    postProgressNow();
+                    postHeadingNow();
 
                     requestAnimationFrame(() => {
-                        refreshHeadingOffsets();
+                        refreshHeadingOffsetsIfNeeded();
                         recomputeScrollMetrics();
-                        postReaderStateNow();
+                        postProgressNow();
+                        postHeadingNow();
                     });
                 }
 
@@ -791,24 +857,27 @@ enum ReaderHTMLTemplate {
                 }
 
                 window.addEventListener('scroll', () => {
-                    scheduleReaderStatePost();
+                    scheduleProgressPost();
+                    scheduleHeadingPost();
                     scheduleSettlePost();
                 }, { passive: true });
                 window.addEventListener('resize', () => {
                     markMetricsDirty();
-                    refreshHeadingOffsets();
-                    scheduleReaderStatePost(true);
+                    markHeadingsDirty();
+                    scheduleProgressPost(true);
+                    scheduleHeadingPost(true);
                     scheduleSettlePost();
                 }, { passive: true });
 
                 if (typeof ResizeObserver === 'function') {
                     const bodyObserver = new ResizeObserver(() => {
                         markMetricsDirty();
-                        refreshHeadingOffsets();
-                        scheduleReaderStatePost(true);
+                        markHeadingsDirty();
+                        scheduleProgressPost(true);
+                        scheduleHeadingPost(true);
                         scheduleSettlePost();
                     });
-                    bodyObserver.observe(document.documentElement);
+                    bodyObserver.observe(document.getElementById('reader-root'));
                 }
             </script>
         </body>

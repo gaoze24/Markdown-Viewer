@@ -45,13 +45,13 @@ struct MarkdownReaderApp: App {
                     model.searchNext()
                 }
                 .keyboardShortcut("g", modifiers: .command)
-                .disabled(model.searchQuery.isEmpty)
+                .disabled(model.searchState.searchQuery.isEmpty)
 
                 Button("Find Previous") {
                     model.searchPrevious()
                 }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
-                .disabled(model.searchQuery.isEmpty)
+                .disabled(model.searchState.searchQuery.isEmpty)
 
                 Divider()
 

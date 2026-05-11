@@ -11,6 +11,8 @@ private enum ToolbarLayout {
 
 struct RootView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject private var searchState: ReaderSearchState
+    @ObservedObject private var viewportState: ReaderViewportState
 
     @AppStorage(ReaderPreferenceKey.baseFontSize) private var baseFontSize = 18.0
     @AppStorage(ReaderPreferenceKey.readingWidth) private var readingWidth = 820.0
@@ -19,19 +21,26 @@ struct RootView: View {
     @State private var splitViewVisibility: NavigationSplitViewVisibility = .all
     @State private var isDropTargeted = false
 
+    init(model: AppModel) {
+        self.model = model
+        self._searchState = ObservedObject(wrappedValue: model.searchState)
+        self._viewportState = ObservedObject(wrappedValue: model.viewportState)
+    }
+
     private var displaySettings: ReaderDisplaySettings {
         ReaderDisplaySettings(baseFontSize: baseFontSize, readingWidth: readingWidth)
     }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $splitViewVisibility) {
-            SidebarView(model: model)
+            SidebarView(model: model, viewportState: viewportState)
                 .background(AppTheme.sidebarBackground)
         } detail: {
             Group {
                 if let renderedDocument = model.renderedDocument {
                     ReaderView(
                         model: model,
+                        searchState: searchState,
                         renderedDocument: renderedDocument,
                         displaySettings: displaySettings
                     )
@@ -91,25 +100,28 @@ struct RootView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                if showProgress, model.hasDocument, model.scrollProgress > 0 {
-                    ToolbarProgressView(progress: model.scrollProgress)
+                if showProgress, model.hasDocument, viewportState.scrollProgress > 0 {
+                    ToolbarProgressView(progress: viewportState.scrollProgress)
                 }
 
                 ToolbarSearchField(
-                    searchQuery: $model.searchQuery,
+                    searchQuery: Binding(
+                        get: { searchState.searchQuery },
+                        set: { model.updateSearchQuery($0) }
+                    ),
                     hasDocument: model.hasDocument,
-                    focusRequestToken: model.searchFocusToken
+                    focusRequestToken: searchState.searchFocusToken
                 )
 
-                if !model.searchQuery.isEmpty, model.hasDocument {
+                if !searchState.searchQuery.isEmpty, model.hasDocument {
                     ToolbarSearchResultsView(
-                        searchResultCount: model.searchResultCount,
-                        currentSearchResult: model.currentSearchResult
+                        searchResultCount: searchState.searchResultCount,
+                        currentSearchResult: searchState.currentSearchResult
                     )
 
                     ToolbarSearchNavigationView(
                         hasDocument: model.hasDocument,
-                        searchQueryIsEmpty: model.searchQuery.isEmpty,
+                        searchQueryIsEmpty: searchState.searchQuery.isEmpty,
                         searchPrevious: model.searchPrevious,
                         searchNext: model.searchNext
                     )
@@ -174,13 +186,13 @@ private struct ToolbarProgressView: View {
     var body: some View {
         HStack(spacing: 8) {
             ZStack(alignment: .leading) {
-                Capsule(style: .continuous)
+                Rectangle()
                     .fill(AppTheme.divider)
-                    .frame(width: 48, height: 4)
+                    .frame(width: 48, height: 3)
 
-                Capsule(style: .continuous)
+                Rectangle()
                     .fill(progressTint)
-                    .frame(width: max(6, 48 * progress), height: 4)
+                    .frame(width: max(6, 48 * progress), height: 3)
             }
 
             Text("\(Int(progress * 100))%")
@@ -211,7 +223,7 @@ private struct ToolbarSearchField: View {
             focusRequestToken: focusRequestToken
         )
         .frame(minWidth: 160, idealWidth: 210, maxWidth: 260)
-        .frame(height: 30)
+        .frame(height: 28)
     }
 }
 
@@ -231,10 +243,14 @@ private struct NativeToolbarSearchField: NSViewRepresentable {
         searchField.placeholderString = placeholder
         searchField.sendsSearchStringImmediately = true
         searchField.sendsWholeSearchString = true
-        searchField.focusRingType = .default
+        searchField.focusRingType = .none
         searchField.lineBreakMode = .byTruncatingTail
         searchField.stringValue = text
         searchField.isEnabled = isEnabled
+        searchField.controlSize = .regular
+        searchField.isBordered = true
+        searchField.drawsBackground = true
+        searchField.bezelStyle = .roundedBezel
         return searchField
     }
 
@@ -333,13 +349,8 @@ private struct ToolbarIconButtonBody: View {
 
         configuration.label
             .frame(width: ToolbarLayout.iconButtonWidth, height: ToolbarLayout.iconButtonHeight)
-            .background(backgroundStyle, in: shape)
-            .overlay(
-                shape
-                    .strokeBorder(borderStyle, lineWidth: borderWidth)
-            )
-            .clipShape(shape)
             .contentShape(shape)
+            .opacity(foregroundOpacity)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.12), value: isHovered)
             .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
@@ -348,24 +359,12 @@ private struct ToolbarIconButtonBody: View {
             }
     }
 
-    private var backgroundStyle: Color {
-        guard isEnabled else { return .clear }
+    private var foregroundOpacity: Double {
+        guard isEnabled else { return 0.45 }
         if configuration.isPressed {
-            return AppTheme.controlHoverFill.opacity(0.9)
+            return 0.62
         }
-        return isHovered ? AppTheme.controlHoverFill : .clear
-    }
-
-    private var borderStyle: Color {
-        guard isEnabled else { return .clear }
-        if configuration.isPressed || isHovered {
-            return AppTheme.controlHoverBorder
-        }
-        return .clear
-    }
-
-    private var borderWidth: CGFloat {
-        configuration.isPressed || isHovered ? 1 : 0
+        return isHovered ? 0.82 : 1
     }
 }
 

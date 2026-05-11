@@ -3,7 +3,10 @@ import SwiftUI
 
 private enum OutlineLayout {
     static let rowInsets = EdgeInsets(top: 3, leading: 4, bottom: 3, trailing: 6)
-    static let depthIndent: CGFloat = 8
+    static let depthIndent: CGFloat = 11
+    static let hierarchyGuideWidth: CGFloat = 1
+    static let hierarchyGuideHeight: CGFloat = 18
+    static let hierarchyGuideCornerRadius: CGFloat = 0.5
     static let disclosureSlot: CGFloat = 16
     static let leafDisclosureSlot: CGFloat = 16
     static let disclosureIconSize: CGFloat = 10
@@ -15,7 +18,6 @@ private enum OutlineLayout {
     static let labelTrailingPadding: CGFloat = 6
     static let selectionCornerRadius: CGFloat = 8
     static let accentWidth: CGFloat = 2.5
-    static let accentHeight: CGFloat = 15
     static let headerSpacing: CGFloat = 8
     static let headerBottomPadding: CGFloat = 4
     static let headerMenuIconSize: CGFloat = 13
@@ -27,6 +29,7 @@ private enum OutlineLayout {
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var viewportState: ReaderViewportState
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,18 +73,16 @@ struct SidebarView: View {
                     .foregroundStyle(AppTheme.secondaryText)
                     .padding(.vertical, 4)
             } else {
-                ForEach(model.outlineRows) { row in
-                    OutlineSidebarRow(
-                        row: row,
-                        toggleAction: {
-                            withAnimation(.easeInOut(duration: 0.16)) {
-                                model.toggleOutlineExpansion(for: row.heading)
-                            }
-                        },
-                        selectAction: { model.jumpToHeading(row.heading) }
-                    )
-                    .listRowInsets(OutlineLayout.rowInsets)
-                }
+                OutlineListRows(
+                    rows: model.outlineRows,
+                    viewportState: viewportState,
+                    toggleAction: { heading in
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            model.toggleOutlineExpansion(for: heading)
+                        }
+                    },
+                    selectAction: model.jumpToHeading(_:)
+                )
             }
         }
     }
@@ -108,6 +109,26 @@ struct SidebarView: View {
             }
         } header: {
             SecondarySidebarSectionHeader(title: "Recent Files")
+        }
+    }
+}
+
+private struct OutlineListRows: View {
+    let rows: [OutlineRowItem]
+    @ObservedObject var viewportState: ReaderViewportState
+    let toggleAction: (TableOfContentsItem) -> Void
+    let selectAction: (TableOfContentsItem) -> Void
+
+    var body: some View {
+        ForEach(rows) { row in
+            OutlineSidebarRow(
+                row: row,
+                isActive: viewportState.activeHeadingID == row.heading.id,
+                hasActiveDescendant: row.heading.id != viewportState.activeHeadingID && viewportState.activePathIDs.contains(row.heading.id),
+                toggleAction: { toggleAction(row.heading) },
+                selectAction: { selectAction(row.heading) }
+            )
+            .listRowInsets(OutlineLayout.rowInsets)
         }
     }
 }
@@ -178,6 +199,8 @@ private struct SecondarySidebarSectionHeader: View {
 
 private struct OutlineSidebarRow: View {
     let row: OutlineRowItem
+    let isActive: Bool
+    let hasActiveDescendant: Bool
     let toggleAction: () -> Void
     let selectAction: () -> Void
 
@@ -192,11 +215,12 @@ private struct OutlineSidebarRow: View {
                 HStack(alignment: .center, spacing: OutlineLayout.labelSpacing) {
                     Capsule()
                         .fill(accent(for: row.level))
-                        .frame(width: OutlineLayout.accentWidth, height: OutlineLayout.accentHeight)
+                        .frame(width: OutlineLayout.accentWidth, height: accentHeight)
+                        .opacity(accentOpacity)
 
                     Text(row.title)
-                        .font(row.isActive ? .system(size: 13, weight: .semibold) : .system(size: 13, weight: .regular))
-                        .foregroundStyle(row.isActive ? AppTheme.primaryText : (row.hasActiveDescendant ? AppTheme.primaryText : AppTheme.secondaryText))
+                        .font(labelFont)
+                        .foregroundStyle(labelColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -225,15 +249,25 @@ private struct OutlineSidebarRow: View {
     private var leadingAccessory: some View {
         HStack(alignment: .center, spacing: 0) {
             if row.depth > 0 {
-                Color.clear
-                    .frame(width: CGFloat(row.depth) * OutlineLayout.depthIndent, height: 1)
+                HStack(alignment: .center, spacing: 0) {
+                    ForEach(0..<row.depth, id: \.self) { depth in
+                        ZStack {
+                            if depth == row.depth - 1 {
+                                RoundedRectangle(cornerRadius: OutlineLayout.hierarchyGuideCornerRadius, style: .continuous)
+                                    .fill(hierarchyGuideColor)
+                                    .frame(width: OutlineLayout.hierarchyGuideWidth, height: OutlineLayout.hierarchyGuideHeight)
+                            }
+                        }
+                        .frame(width: OutlineLayout.depthIndent)
+                    }
+                }
             }
 
             if row.hasChildren {
                 Button(action: toggleAction) {
                     Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: OutlineLayout.disclosureIconSize, weight: .semibold))
-                        .foregroundStyle(AppTheme.secondaryText)
+                        .foregroundStyle(disclosureColor)
                         .frame(width: OutlineLayout.disclosureSlot, height: OutlineLayout.disclosureTapHeight)
                         .background(disclosureBackgroundStyle, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
@@ -254,12 +288,58 @@ private struct OutlineSidebarRow: View {
         }
     }
 
+    private var labelFont: Font {
+        if isActive {
+            return .system(size: 13, weight: .semibold)
+        }
+
+        if row.depth == 0 {
+            return .system(size: 13, weight: .medium)
+        }
+
+        return .system(size: 13, weight: .regular)
+    }
+
+    private var labelColor: Color {
+        if isActive {
+            return AppTheme.primaryText
+        }
+
+        if hasActiveDescendant || row.depth == 0 {
+            return AppTheme.primaryText
+        }
+
+        return AppTheme.secondaryText
+    }
+
+    private var accentHeight: CGFloat {
+        switch row.level {
+        case 1:
+            return 16
+        case 2:
+            return 13
+        default:
+            return 10
+        }
+    }
+
+    private var accentOpacity: Double {
+        switch row.level {
+        case 1:
+            return 1
+        case 2:
+            return 0.86
+        default:
+            return 0.68
+        }
+    }
+
     private var backgroundStyle: Color {
-        if row.isActive {
+        if isActive {
             return AppTheme.subtleAccentFill
         }
 
-        if row.hasActiveDescendant {
+        if hasActiveDescendant {
             return AppTheme.subtleAccentFill.opacity(0.45)
         }
 
@@ -271,15 +351,39 @@ private struct OutlineSidebarRow: View {
     }
 
     private var borderStyle: Color {
-        row.isActive ? AppTheme.subtleAccentBorder : .clear
+        isActive ? AppTheme.subtleAccentBorder : .clear
     }
 
     private var borderWidth: CGFloat {
-        row.isActive ? 1 : 0
+        isActive ? 1 : 0
+    }
+
+    private var hierarchyGuideColor: Color {
+        if hasActiveDescendant {
+            return AppTheme.subtleAccentBorder.opacity(0.6)
+        }
+
+        return AppTheme.softBorder
+    }
+
+    private var disclosureColor: Color {
+        if isActive || hasActiveDescendant {
+            return AppTheme.primaryText
+        }
+
+        return AppTheme.secondaryText
     }
 
     private var disclosureBackgroundStyle: Color {
-        isDisclosureHovered ? AppTheme.controlHoverFill : .clear
+        if isDisclosureHovered {
+            return AppTheme.controlHoverFill
+        }
+
+        if hasActiveDescendant {
+            return AppTheme.controlSubtleFill
+        }
+
+        return .clear
     }
 
     private func accent(for level: Int) -> Color {

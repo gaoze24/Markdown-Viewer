@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ReaderView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var searchState: ReaderSearchState
     let renderedDocument: RenderedDocument
     let displaySettings: ReaderDisplaySettings
 
@@ -12,9 +13,9 @@ struct ReaderView: View {
                 bodyHTML: renderedDocument.bodyHTML,
                 baseURL: model.documentBaseURL,
                 displaySettings: displaySettings,
-                searchQuery: model.debouncedSearchQuery,
-                searchNavigationRequest: model.searchNavigationRequest,
-                anchorNavigationRequest: model.anchorNavigationRequest,
+                searchQuery: searchState.debouncedSearchQuery,
+                searchNavigationRequest: searchState.searchNavigationRequest,
+                anchorNavigationRequest: searchState.anchorNavigationRequest,
                 onSearchUpdate: model.updateSearchResults(count:currentIndex:),
                 onProgressUpdate: model.updateScrollProgress(_:),
                 onActiveHeadingUpdate: model.updateActiveHeading(_:),
