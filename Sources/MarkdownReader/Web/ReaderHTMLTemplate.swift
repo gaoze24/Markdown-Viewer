@@ -431,6 +431,7 @@ enum ReaderHTMLTemplate {
                     h2 { font-size: 1.58em; }
                 }
             </style>
+            \(CodeHighlightingAssets.style)
         </head>
         <body>
             <main>
@@ -441,6 +442,7 @@ enum ReaderHTMLTemplate {
                 </div>
             </main>
             \(mathScript)
+            \(CodeHighlightingAssets.script)
             <script>
                 const headingSelector = '#reader-root h1[id], #reader-root h2[id], #reader-root h3[id], #reader-root h4[id], #reader-root h5[id], #reader-root h6[id]';
                 const scrollProgressPostIntervalMs = 90;
@@ -837,6 +839,7 @@ enum ReaderHTMLTemplate {
 
                 function initialize() {
                     renderMath();
+                    highlightCodeBlocks();
                     refreshHeadingCache();
                     recomputeScrollMetrics();
                     postProgressNow();

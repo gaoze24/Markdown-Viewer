@@ -778,12 +778,34 @@ private struct Parser {
         guard trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") else { return nil }
         let character = trimmed.first!
         let fenceLength = trimmed.prefix { $0 == character }.count
-        let language = trimmed.dropFirst(fenceLength).trimmingCharacters(in: .whitespaces)
+        let language = normalizedFenceLanguage(from: trimmed.dropFirst(fenceLength))
         return FenceInfo(
             character: character,
             length: fenceLength,
-            language: language.isEmpty ? nil : language
+            language: language
         )
+    }
+
+    private func normalizedFenceLanguage(from rawInfo: Substring) -> String? {
+        let info = rawInfo.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !info.isEmpty else { return nil }
+
+        var token = info
+            .split(whereSeparator: { $0.isWhitespace })
+            .first
+            .map(String.init) ?? ""
+
+        token = token.trimmingCharacters(in: CharacterSet(charactersIn: "{}"))
+        if token.hasPrefix(".") {
+            token.removeFirst()
+        }
+
+        let allowedPunctuation: Set<Character> = ["_", "+", "#", "-", "."]
+        let sanitized = token
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber || allowedPunctuation.contains($0) }
+
+        return sanitized.isEmpty ? nil : sanitized
     }
 
     private func isTableDelimiter(_ line: String) -> Bool {

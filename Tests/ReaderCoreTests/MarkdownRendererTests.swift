@@ -286,6 +286,25 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(document.bodyHTML.contains("if a &amp;gt; b then ..."))
     }
 
+    func testRendererNormalizesFenceInfoToPrimaryLanguageClass() {
+        let markdown = """
+        ```Swift title="Example"
+        let value = "<safe>"
+        ```
+
+        ```C++
+        std::cout << value;
+        ```
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("<code class=\"language-swift\">"))
+        XCTAssertTrue(document.bodyHTML.contains("<code class=\"language-c++\">"))
+        XCTAssertTrue(document.bodyHTML.contains("let value = &quot;&lt;safe&gt;&quot;"))
+        XCTAssertFalse(document.bodyHTML.contains("title=&quot;Example&quot;"))
+    }
+
     func testRendererDecodesEntitiesForOutlineTitles() {
         let markdown = """
         ## if a &gt; b then ...
