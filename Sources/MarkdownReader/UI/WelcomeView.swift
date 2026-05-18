@@ -81,18 +81,13 @@ struct WelcomeView: View {
             HStack(spacing: 10) {
                 if !recentFiles.isEmpty {
                     Button("Clear Recent Files…", action: clearRecentFilesAction)
-                        .buttonStyle(.plain)
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.controlSubtleFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .buttonStyle(LibraryActionButtonStyle(prominence: .secondary))
                 }
 
                 Button(action: openAction) {
                     Label("Open File", systemImage: "folder.badge.plus")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonStyle(LibraryActionButtonStyle(prominence: .primary))
             }
         }
         .padding(.bottom, 4)
@@ -168,8 +163,7 @@ struct WelcomeView: View {
                     Button(action: openAction) {
                         Label("Choose Markdown File", systemImage: "folder")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
+                    .buttonStyle(LibraryActionButtonStyle(prominence: .primary))
                 }
             }
             .padding(.vertical, 10)
@@ -231,6 +225,79 @@ struct WelcomeView: View {
     }
 }
 
+private enum LibraryActionButtonProminence: Equatable {
+    case primary
+    case secondary
+}
+
+private struct LibraryActionButtonStyle: ButtonStyle {
+    let prominence: LibraryActionButtonProminence
+
+    func makeBody(configuration: Configuration) -> some View {
+        LibraryActionButtonBody(configuration: configuration, prominence: prominence)
+    }
+}
+
+private struct LibraryActionButtonBody: View {
+    let configuration: LibraryActionButtonStyle.Configuration
+    let prominence: LibraryActionButtonProminence
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(foregroundStyle)
+            .padding(.horizontal, prominence == .primary ? 15 : 11)
+            .padding(.vertical, prominence == .primary ? 8 : 7)
+            .background(backgroundStyle, in: shape)
+            .overlay(
+                shape.strokeBorder(borderStyle, lineWidth: 1)
+            )
+            .contentShape(shape)
+            .opacity(isEnabled ? 1 : 0.5)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+
+    private var foregroundStyle: Color {
+        switch prominence {
+        case .primary:
+            return AppTheme.controlProminentText
+        case .secondary:
+            return AppTheme.primaryText
+        }
+    }
+
+    private var backgroundStyle: Color {
+        if prominence == .primary {
+            return isHovered || configuration.isPressed
+                ? AppTheme.controlProminentHoverFill
+                : AppTheme.controlProminentFill
+        }
+
+        return isHovered || configuration.isPressed
+            ? AppTheme.controlHoverFill
+            : AppTheme.controlFill
+    }
+
+    private var borderStyle: Color {
+        switch prominence {
+        case .primary:
+            return AppTheme.controlProminentHoverFill
+        case .secondary:
+            return isHovered ? AppTheme.controlHoverBorder : AppTheme.controlBorder
+        }
+    }
+}
+
 private struct LibraryFeatureRow: View {
     enum Emphasis {
         case featured
@@ -245,54 +312,28 @@ private struct LibraryFeatureRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        ZStack(alignment: .trailing) {
             Button(action: openAction) {
-                HStack(spacing: 16) {
-                    rowIcon
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(eyebrow)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppTheme.tertiaryText)
-
-                        Text(item.name)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
-                            .lineLimit(1)
-
-                        Text(item.path)
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .lineLimit(2)
-                    }
-
-                    Spacer(minLength: 20)
-
-                    HStack(spacing: 10) {
-                        availabilityBadge
-
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .opacity(isHovered && item.isAvailable ? 1 : 0.45)
-                            .offset(x: isHovered && item.isAvailable ? 2 : 0)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                rowContent
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 16)
+                    .padding(.trailing, 38)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(!item.isAvailable)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             RecentFileRemoveButton(isVisible: isHovered, action: removeAction)
+                .padding(.trailing, 18)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
         .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: 1)
         )
-        .contentShape(Rectangle())
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.14)) {
                 isHovered = hovering
@@ -300,6 +341,40 @@ private struct LibraryFeatureRow: View {
         }
         .contextMenu {
             recentFileContextMenu(for: item, openAction: openAction, removeAction: removeAction)
+        }
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 16) {
+            rowIcon
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(eyebrow)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.tertiaryText)
+
+                Text(item.name)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
+                    .lineLimit(1)
+
+                Text(item.path)
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 20)
+
+            HStack(spacing: 10) {
+                availabilityBadge
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .opacity(isHovered && item.isAvailable ? 1 : 0.45)
+                    .offset(x: isHovered && item.isAvailable ? 2 : 0)
+            }
         }
     }
 
@@ -355,44 +430,21 @@ private struct LibraryListRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        ZStack(alignment: .trailing) {
             Button(action: openAction) {
-                HStack(spacing: 14) {
-                    icon
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.name)
-                            .font(.headline)
-                            .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
-                            .lineLimit(1)
-                        Text(item.path)
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 12)
-
-                    if item.isAvailable {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.tertiaryText)
-                            .opacity(isHovered ? 1 : 0.55)
-                    } else {
-                        Text("Missing")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(AppTheme.warning)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                rowContent
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .padding(.trailing, 34)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!item.isAvailable)
 
             RecentFileRemoveButton(isVisible: isHovered, action: removeAction)
+                .padding(.trailing, 16)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
         .background(isHovered && item.isAvailable ? AppTheme.subtleAccentFill : .clear)
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -402,6 +454,36 @@ private struct LibraryListRow: View {
         }
         .contextMenu {
             recentFileContextMenu(for: item, openAction: openAction, removeAction: removeAction)
+        }
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 14) {
+            icon
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.name)
+                    .font(.headline)
+                    .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
+                    .lineLimit(1)
+                Text(item.path)
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            if item.isAvailable {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.tertiaryText)
+                    .opacity(isHovered ? 1 : 0.55)
+            } else {
+                Text("Missing")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTheme.warning)
+            }
         }
     }
 

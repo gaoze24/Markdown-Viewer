@@ -385,6 +385,20 @@ final class AppModel: ObservableObject {
         open(url: currentFileURL, addToRecentFiles: false)
     }
 
+    func returnToLibrary() {
+        loadTask?.cancel()
+        loadTask = nil
+        watcher.stop()
+        renderedDocument = nil
+        currentFileURL = nil
+        isLoading = false
+        loadErrorMessage = nil
+        availabilityMessage = nil
+        searchState.reset()
+        viewportState.reset()
+        refreshOutlineRows()
+    }
+
     func removeRecent(_ item: RecentFileItem) {
         recentStore.remove(documentID: item.id)
         refreshRecentFiles()

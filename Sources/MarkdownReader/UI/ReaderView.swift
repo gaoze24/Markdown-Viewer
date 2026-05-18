@@ -60,3 +60,9 @@ struct ReaderView: View {
         model.loadErrorMessage ?? model.availabilityMessage
     }
 }
+
+enum ReaderReturnPresentation {
+    static func isVisible(hasDocument: Bool) -> Bool {
+        hasDocument
+    }
+}

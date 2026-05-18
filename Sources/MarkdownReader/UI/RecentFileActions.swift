@@ -19,7 +19,7 @@ struct RecentFileRemoveButton: View {
         .buttonStyle(.plain)
         .help("Remove from Recents")
         .accessibilityLabel("Remove from Recents")
-        .opacity(isVisible ? 0.96 : 0.45)
+        .opacity(isVisible ? 1 : 0.68)
         .scaleEffect(isVisible || isHovered ? 1 : 0.96)
         .animation(.easeOut(duration: 0.14), value: isVisible)
         .animation(.easeOut(duration: 0.12), value: isHovered)
@@ -29,11 +29,11 @@ struct RecentFileRemoveButton: View {
     }
 
     private var backgroundStyle: Color {
-        isHovered ? AppTheme.controlHoverFill : AppTheme.controlSubtleFill
+        isHovered ? AppTheme.controlHoverFill : AppTheme.controlFill
     }
 
     private var iconForeground: Color {
-        isHovered ? AppTheme.primaryText : AppTheme.tertiaryText
+        isHovered ? AppTheme.primaryText : AppTheme.secondaryText
     }
 }
 

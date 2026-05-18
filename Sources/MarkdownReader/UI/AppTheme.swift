@@ -23,6 +23,11 @@ enum AppTheme {
     static let controlHoverFill = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.10, darkAlpha: 0.15)
     static let controlHoverBorder = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.18, darkAlpha: 0.20)
     static let controlSubtleFill = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.05, darkAlpha: 0.08)
+    static let controlFill = dynamicColor(light: 0xFFF8EF, dark: 0x2E261F, lightAlpha: 0.92, darkAlpha: 0.96)
+    static let controlBorder = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.24, darkAlpha: 0.22)
+    static let controlProminentFill = dynamicColor(light: 0x7A5D3D, dark: 0xD1AA7A)
+    static let controlProminentHoverFill = dynamicColor(light: 0x6B5135, dark: 0xE0B98A)
+    static let controlProminentText = dynamicColor(light: 0xFFF8EF, dark: 0x1F160F)
 
     static func outlineAccent(for level: Int) -> Color {
         switch level {

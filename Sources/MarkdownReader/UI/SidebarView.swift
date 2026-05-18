@@ -27,6 +27,12 @@ private enum OutlineLayout {
     static let chromeBottomPadding: CGFloat = 12
 }
 
+enum SidebarPresentation {
+    static func subtitle(hasDocument _: Bool, outlineIsEmpty _: Bool) -> String? {
+        nil
+    }
+}
+
 struct SidebarView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var viewportState: ReaderViewportState
@@ -58,11 +64,10 @@ struct SidebarView: View {
     }
 
     private var sidebarSubtitle: String? {
-        if model.hasDocument {
-            model.outlineRows.isEmpty ? "No headings found" : nil
-        } else {
-            "Recent markdown files"
-        }
+        SidebarPresentation.subtitle(
+            hasDocument: model.hasDocument,
+            outlineIsEmpty: model.outlineRows.isEmpty
+        )
     }
 
     @ViewBuilder
@@ -158,7 +163,11 @@ private struct SidebarChromeHeader: View {
                             .font(.system(size: OutlineLayout.headerMenuIconSize, weight: .regular))
                             .foregroundStyle(AppTheme.secondaryText)
                             .frame(width: OutlineLayout.headerMenuButtonSize, height: OutlineLayout.headerMenuButtonSize)
-                            .background(AppTheme.controlSubtleFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .background(AppTheme.controlFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(AppTheme.controlBorder, lineWidth: 1)
+                            )
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)

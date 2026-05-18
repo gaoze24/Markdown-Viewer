@@ -33,6 +33,11 @@ let package = Package(
             name: "ReaderCoreTests",
             dependencies: ["ReaderCore"],
             path: "Tests/ReaderCoreTests"
+        ),
+        .testTarget(
+            name: "MarkdownReaderTests",
+            dependencies: ["MarkdownReader"],
+            path: "Tests/MarkdownReaderTests"
         )
     ]
 )

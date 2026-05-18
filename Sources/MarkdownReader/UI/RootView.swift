@@ -36,7 +36,7 @@ struct RootView: View {
             SidebarView(model: model, viewportState: viewportState)
                 .background(AppTheme.sidebarBackground)
         } detail: {
-            Group {
+            ZStack {
                 if let renderedDocument = model.renderedDocument {
                     ReaderView(
                         model: model,
@@ -44,6 +44,8 @@ struct RootView: View {
                         renderedDocument: renderedDocument,
                         displaySettings: displaySettings
                     )
+                    .id(detailPageIdentity)
+                    .transition(.opacity)
                 } else {
                     WelcomeView(
                         recentFiles: model.recentFiles,
@@ -58,8 +60,11 @@ struct RootView: View {
                         clearRecentFilesAction: model.confirmAndClearRecentFiles,
                         isDropTargeted: isDropTargeted
                     )
+                    .id(detailPageIdentity)
+                    .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: RootDetailPagePresentation.transitionAnimationDuration), value: detailPageIdentity)
             .background(AppTheme.detailBackground)
         }
         .navigationTitle(model.windowTitle)
@@ -72,6 +77,17 @@ struct RootView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
+                if ReaderReturnPresentation.isVisible(hasDocument: model.hasDocument) {
+                    Button {
+                        model.returnToLibrary()
+                    } label: {
+                        ToolbarIconGlyph(systemName: "chevron.left")
+                    }
+                    .buttonStyle(ToolbarIconButtonStyle())
+                    .help("Return to Library")
+                    .accessibilityLabel("Return to Library")
+                }
+
                 Button {
                     model.openPanel()
                 } label: {
@@ -100,7 +116,10 @@ struct RootView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                if showProgress, model.hasDocument, viewportState.scrollProgress > 0 {
+                if ToolbarProgressPresentation.isVisible(
+                    showProgressPreference: showProgress,
+                    hasDocument: model.hasDocument
+                ) {
                     ToolbarProgressView(progress: viewportState.scrollProgress)
                 }
 
@@ -129,11 +148,36 @@ struct RootView: View {
             }
         }
     }
+
+    private var detailPageIdentity: String {
+        RootDetailPagePresentation.pageIdentity(
+            hasDocument: model.hasDocument,
+            documentPath: model.currentFileURL?.path
+        )
+    }
+}
+
+enum RootDetailPagePresentation {
+    static let transitionAnimationDuration = 0.2
+
+    static func pageIdentity(hasDocument: Bool, documentPath: String?) -> String {
+        guard hasDocument else {
+            return "library"
+        }
+
+        guard let documentPath else {
+            return "reader"
+        }
+
+        return "reader:\(documentPath)"
+    }
 }
 
 private struct ToolbarTitleView: View {
     let title: String
     let subtitle: String?
+
+    @State private var isShowingSubtitlePopover = false
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -152,14 +196,7 @@ private struct ToolbarTitleView: View {
             VStack(spacing: 1) {
                 titleLine
 
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .allowsTightening(true)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
+                subtitleLine(subtitle)
             }
             .frame(minWidth: 210, idealWidth: 270, maxWidth: 320, alignment: .center)
         } else {
@@ -177,6 +214,53 @@ private struct ToolbarTitleView: View {
             .allowsTightening(true)
             .frame(maxWidth: .infinity)
             .multilineTextAlignment(.center)
+    }
+
+    private func subtitleLine(_ subtitle: String) -> some View {
+        Text(subtitle)
+            .font(.caption2)
+            .foregroundStyle(AppTheme.secondaryText)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .allowsTightening(true)
+            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(.center)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isShowingSubtitlePopover = hovering && ToolbarTitlePresentation.subtitlePopoverText(for: subtitle) != nil
+            }
+            .popover(isPresented: $isShowingSubtitlePopover, arrowEdge: .bottom) {
+                if let popoverText = ToolbarTitlePresentation.subtitlePopoverText(for: subtitle) {
+                    ToolbarSubtitlePopover(text: popoverText)
+                }
+            }
+    }
+}
+
+enum ToolbarTitlePresentation {
+    static func subtitlePopoverText(for subtitle: String?) -> String? {
+        guard let subtitle, !subtitle.isEmpty else {
+            return nil
+        }
+
+        return subtitle
+    }
+}
+
+private struct ToolbarSubtitlePopover: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .foregroundStyle(AppTheme.primaryText)
+            .textSelection(.enabled)
+            .lineLimit(3)
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(minWidth: 260, idealWidth: 360, maxWidth: 480, alignment: .leading)
+            .background(AppTheme.elevatedSurface)
     }
 }
 
@@ -207,6 +291,12 @@ private struct ToolbarProgressView: View {
 
     private var progressTint: Color {
         AppTheme.progressTint(for: progress)
+    }
+}
+
+enum ToolbarProgressPresentation {
+    static func isVisible(showProgressPreference: Bool, hasDocument: Bool) -> Bool {
+        showProgressPreference && hasDocument
     }
 }
 
@@ -349,6 +439,7 @@ private struct ToolbarIconButtonBody: View {
 
         configuration.label
             .frame(width: ToolbarLayout.iconButtonWidth, height: ToolbarLayout.iconButtonHeight)
+            .background(backgroundStyle, in: shape)
             .contentShape(shape)
             .opacity(foregroundOpacity)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
@@ -359,12 +450,28 @@ private struct ToolbarIconButtonBody: View {
             }
     }
 
+    private var backgroundStyle: Color {
+        guard isEnabled else {
+            return .clear
+        }
+
+        if configuration.isPressed {
+            return AppTheme.controlHoverFill
+        }
+
+        if isHovered {
+            return AppTheme.controlSubtleFill
+        }
+
+        return .clear
+    }
+
     private var foregroundOpacity: Double {
         guard isEnabled else { return 0.45 }
         if configuration.isPressed {
-            return 0.62
+            return 0.72
         }
-        return isHovered ? 0.82 : 1
+        return isHovered ? 0.9 : 0.82
     }
 }
 
