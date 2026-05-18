@@ -12,7 +12,6 @@ private enum ToolbarLayout {
 struct RootView: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var searchState: ReaderSearchState
-    @ObservedObject private var viewportState: ReaderViewportState
 
     @AppStorage(ReaderPreferenceKey.baseFontSize) private var baseFontSize = 18.0
     @AppStorage(ReaderPreferenceKey.readingWidth) private var readingWidth = 820.0
@@ -24,7 +23,6 @@ struct RootView: View {
     init(model: AppModel) {
         self.model = model
         self._searchState = ObservedObject(wrappedValue: model.searchState)
-        self._viewportState = ObservedObject(wrappedValue: model.viewportState)
     }
 
     private var displaySettings: ReaderDisplaySettings {
@@ -33,7 +31,7 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $splitViewVisibility) {
-            SidebarView(model: model, viewportState: viewportState)
+            SidebarView(model: model, viewportState: model.viewportState)
                 .background(AppTheme.sidebarBackground)
         } detail: {
             ZStack {
@@ -120,7 +118,7 @@ struct RootView: View {
                     showProgressPreference: showProgress,
                     hasDocument: model.hasDocument
                 ) {
-                    ToolbarProgressView(progress: viewportState.scrollProgress)
+                    ToolbarProgressContainer(progressState: model.progressState)
                 }
 
                 ToolbarSearchField(
@@ -291,6 +289,14 @@ private struct ToolbarProgressView: View {
 
     private var progressTint: Color {
         AppTheme.progressTint(for: progress)
+    }
+}
+
+private struct ToolbarProgressContainer: View {
+    @ObservedObject var progressState: ReaderProgressState
+
+    var body: some View {
+        ToolbarProgressView(progress: progressState.scrollProgress)
     }
 }
 

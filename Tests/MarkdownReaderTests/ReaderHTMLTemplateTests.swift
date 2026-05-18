@@ -2,6 +2,16 @@ import XCTest
 @testable import MarkdownReader
 
 final class ReaderHTMLTemplateTests: XCTestCase {
+    func testReaderScriptCachesCurrentSearchAndHeadingStateForLargeDocuments() {
+        let html = ReaderHTMLTemplate.makeDocument(
+            bodyHTML: "<h1 id=\"intro\">Intro</h1><p>Hello reader.</p>",
+            settings: ReaderDisplaySettings(baseFontSize: 18, readingWidth: 820)
+        )
+
+        XCTAssertTrue(html.contains("lastCurrentMatchIndex"))
+        XCTAssertTrue(html.contains("activeHeadingIndex"))
+    }
+
     func testReaderTemplateIncludesOfflineSyntaxHighlightingForMainstreamLanguages() {
         let html = ReaderHTMLTemplate.makeDocument(
             bodyHTML: """

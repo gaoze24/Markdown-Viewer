@@ -54,13 +54,109 @@ struct OutlineRowItem: Identifiable, Equatable {
     }
 }
 
+enum OutlineRowBuilder {
+    static func makeRows(
+        from headings: [TableOfContentsItem],
+        expandedIDs: Set<String>
+    ) -> [OutlineRowItem] {
+        var rows: [OutlineRowItem] = []
+        rows.reserveCapacity(headings.count)
+
+        var stack = headings.reversed().map { (heading: $0, depth: 0) }
+        while let item = stack.popLast() {
+            let isExpanded = item.heading.hasChildren && expandedIDs.contains(item.heading.id)
+            rows.append(
+                OutlineRowItem(
+                    heading: item.heading,
+                    depth: item.depth,
+                    isExpanded: isExpanded
+                )
+            )
+
+            guard item.heading.hasChildren, isExpanded else { continue }
+            for child in item.heading.children.reversed() {
+                stack.append((heading: child, depth: item.depth + 1))
+            }
+        }
+
+        return rows
+    }
+}
+
+enum OutlineTreeBuilder {
+    static func parentLookup(for headings: [TableOfContentsItem]) -> [String: String] {
+        var lookup: [String: String] = [:]
+        var stack = headings.reversed().map { (heading: $0, parentID: Optional<String>.none) }
+
+        while let item = stack.popLast() {
+            if let parentID = item.parentID {
+                lookup[item.heading.id] = parentID
+            }
+
+            for child in item.heading.children.reversed() {
+                stack.append((heading: child, parentID: item.heading.id))
+            }
+        }
+
+        return lookup
+    }
+
+    static func expandableIDs(in headings: [TableOfContentsItem]) -> Set<String> {
+        var ids: Set<String> = []
+        var stack = Array(headings.reversed())
+
+        while let heading = stack.popLast() {
+            if heading.hasChildren {
+                ids.insert(heading.id)
+            }
+
+            stack.append(contentsOf: heading.children.reversed())
+        }
+
+        return ids
+    }
+
+    static func defaultExpandedIDs(in headings: [TableOfContentsItem]) -> Set<String> {
+        var ids: Set<String> = []
+        var stack = Array(headings.reversed())
+
+        while let heading = stack.popLast() {
+            if heading.hasChildren && heading.level <= 2 {
+                ids.insert(heading.id)
+            }
+
+            stack.append(contentsOf: heading.children.reversed())
+        }
+
+        return ids
+    }
+}
+
+@MainActor
+final class ReaderProgressState: ObservableObject {
+    @Published private(set) var scrollProgress = 0.0
+
+    private var lastReportedScrollPercent: Int = -1
+
+    func updateScrollProgress(_ progress: Double) {
+        let clamped = min(max(progress, 0), 1)
+        let percent = Int((clamped * 100).rounded())
+        guard percent != lastReportedScrollPercent else { return }
+        lastReportedScrollPercent = percent
+        scrollProgress = Double(percent) / 100
+    }
+
+    func reset() {
+        lastReportedScrollPercent = -1
+        scrollProgress = 0
+    }
+}
+
 @MainActor
 final class ReaderViewportState: ObservableObject {
-    @Published private(set) var scrollProgress = 0.0
     @Published private(set) var activeHeadingID: String?
     @Published private(set) var activePathIDs: Set<String> = []
 
-    private var lastReportedScrollPercent: Int = -1
     private var pendingProgrammaticHeadingID: String?
     private var programmaticHeadingUnlockTask: Task<Void, Never>?
 
@@ -90,17 +186,7 @@ final class ReaderViewportState: ObservableObject {
         return setActiveHeading(headingID, ancestorIDs: ancestorIDs)
     }
 
-    func updateScrollProgress(_ progress: Double) {
-        let clamped = min(max(progress, 0), 1)
-        let percent = Int((clamped * 100).rounded())
-        guard percent != lastReportedScrollPercent else { return }
-        lastReportedScrollPercent = percent
-        scrollProgress = Double(percent) / 100
-    }
-
     func reset() {
-        lastReportedScrollPercent = -1
-        scrollProgress = 0
         clearProgrammaticNavigationLock()
         _ = setActiveHeading(nil, ancestorIDs: [])
     }
@@ -208,6 +294,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var availabilityMessage: String?
 
     let viewportState = ReaderViewportState()
+    let progressState = ReaderProgressState()
     let searchState = ReaderSearchState()
 
     var windowTitle: String {
@@ -300,7 +387,7 @@ final class AppModel: ObservableObject {
 
     func expandAllOutlineItems() {
         guard let renderedDocument else { return }
-        persistOutlineExpandedIDs(Self.expandableOutlineIDs(in: renderedDocument.tableOfContents))
+        persistOutlineExpandedIDs(OutlineTreeBuilder.expandableIDs(in: renderedDocument.tableOfContents))
         refreshOutlineRows()
     }
 
@@ -314,7 +401,7 @@ final class AppModel: ObservableObject {
     }
 
     func updateScrollProgress(_ progress: Double) {
-        viewportState.updateScrollProgress(progress)
+        progressState.updateScrollProgress(progress)
     }
 
     func updateSearchQuery(_ nextValue: String) {
@@ -395,6 +482,7 @@ final class AppModel: ObservableObject {
         loadErrorMessage = nil
         availabilityMessage = nil
         searchState.reset()
+        progressState.reset()
         viewportState.reset()
         refreshOutlineRows()
     }
@@ -436,6 +524,7 @@ final class AppModel: ObservableObject {
         currentFileURL = standardized
         isLoading = true
         searchState.reset()
+        progressState.reset()
         viewportState.reset()
 
         if addToRecentFiles {
@@ -447,10 +536,7 @@ final class AppModel: ObservableObject {
         loadTask?.cancel()
         loadTask = Task { [renderer] in
             do {
-                let markdown = try Self.readMarkdown(from: standardized)
-                let rendered = await Task.detached(priority: .userInitiated) {
-                    renderer.render(markdown: markdown, sourceURL: standardized)
-                }.value
+                let rendered = try await DocumentLoader.renderDocument(from: standardized, renderer: renderer)
 
                 guard !Task.isCancelled else { return }
                 self.renderedDocument = rendered
@@ -499,12 +585,12 @@ final class AppModel: ObservableObject {
     }
 
     private func configureOutlineState(for renderedDocument: RenderedDocument, documentURL: URL) {
-        outlineParentByID = Self.outlineParentLookup(for: renderedDocument.tableOfContents)
+        outlineParentByID = OutlineTreeBuilder.parentLookup(for: renderedDocument.tableOfContents)
 
         let documentKey = Self.documentKey(for: documentURL)
-        let defaultExpandedIDs = Self.defaultExpandedOutlineIDs(in: renderedDocument.tableOfContents)
+        let defaultExpandedIDs = OutlineTreeBuilder.defaultExpandedIDs(in: renderedDocument.tableOfContents)
         let sanitizedExpandedIDs = outlineExpandedIDsByDocument[documentKey, default: defaultExpandedIDs]
-            .intersection(Self.expandableOutlineIDs(in: renderedDocument.tableOfContents))
+            .intersection(OutlineTreeBuilder.expandableIDs(in: renderedDocument.tableOfContents))
 
         outlineExpandedIDsByDocument[documentKey] = sanitizedExpandedIDs
         let initialHeadingID = renderedDocument.tableOfContents.first?.id
@@ -522,7 +608,7 @@ final class AppModel: ObservableObject {
             return
         }
 
-        outlineRows = Self.makeOutlineRows(
+        outlineRows = OutlineRowBuilder.makeRows(
             from: renderedDocument.tableOfContents,
             expandedIDs: currentOutlineExpandedIDs()
         )
@@ -569,61 +655,6 @@ final class AppModel: ObservableObject {
         return ancestors
     }
 
-    private static func makeOutlineRows(
-        from headings: [TableOfContentsItem],
-        expandedIDs: Set<String>,
-        depth: Int = 0
-    ) -> [OutlineRowItem] {
-        headings.flatMap { heading -> [OutlineRowItem] in
-            let isExpanded = heading.hasChildren && expandedIDs.contains(heading.id)
-            let row = OutlineRowItem(
-                heading: heading,
-                depth: depth,
-                isExpanded: isExpanded
-            )
-
-            guard heading.hasChildren, isExpanded else {
-                return [row]
-            }
-
-            return [row] + makeOutlineRows(
-                from: heading.children,
-                expandedIDs: expandedIDs,
-                depth: depth + 1
-            )
-        }
-    }
-
-    private static func outlineParentLookup(for headings: [TableOfContentsItem]) -> [String: String] {
-        var lookup: [String: String] = [:]
-
-        func walk(_ items: [TableOfContentsItem], parentID: String?) {
-            for item in items {
-                if let parentID {
-                    lookup[item.id] = parentID
-                }
-                walk(item.children, parentID: item.id)
-            }
-        }
-
-        walk(headings, parentID: nil)
-        return lookup
-    }
-
-    private static func expandableOutlineIDs(in headings: [TableOfContentsItem]) -> Set<String> {
-        Set(headings.flatMap { heading -> [String] in
-            let ownID = heading.hasChildren ? [heading.id] : []
-            return ownID + Array(expandableOutlineIDs(in: heading.children))
-        })
-    }
-
-    private static func defaultExpandedOutlineIDs(in headings: [TableOfContentsItem]) -> Set<String> {
-        Set(headings.flatMap { heading -> [String] in
-            let ownID = heading.hasChildren && heading.level <= 2 ? [heading.id] : []
-            return ownID + Array(defaultExpandedOutlineIDs(in: heading.children))
-        })
-    }
-
     private static func documentKey(for url: URL) -> String {
         url.standardizedFileURL.path
     }
@@ -638,23 +669,6 @@ final class AppModel: ObservableObject {
         if let url = candidates.first(where: { Self.isSupportedMarkdownURL($0) }) {
             open(url: url)
         }
-    }
-
-    nonisolated private static func readMarkdown(from url: URL) throws -> String {
-        let data = try Data(contentsOf: url)
-        let encodings: [String.Encoding] = [.utf8, .unicode, .utf16, .utf32, .ascii]
-
-        for encoding in encodings {
-            if let value = String(data: data, encoding: encoding) {
-                return value
-            }
-        }
-
-        throw NSError(
-            domain: "MarkdownReader",
-            code: 1001,
-            userInfo: [NSLocalizedDescriptionKey: "The file could not be decoded as plain text."]
-        )
     }
 
     nonisolated private static func isSupportedMarkdownURL(_ url: URL) -> Bool {

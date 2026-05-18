@@ -454,7 +454,9 @@ enum ReaderHTMLTemplate {
                 const readerState = {
                     matches: [],
                     currentMatchIndex: 0,
+                    lastCurrentMatchIndex: 0,
                     activeHeadingId: null,
+                    activeHeadingIndex: -1,
                     headings: [],
                     headingOffsets: [],
                     lastProgressPercent: -1,
@@ -488,6 +490,9 @@ enum ReaderHTMLTemplate {
 
                 function refreshHeadingCache() {
                     readerState.headings = Array.from(document.querySelectorAll(headingSelector));
+                    readerState.activeHeadingIndex = readerState.activeHeadingId === null
+                        ? -1
+                        : readerState.headings.findIndex((heading) => heading.id === readerState.activeHeadingId);
                     markHeadingsDirty();
                     refreshHeadingOffsetsIfNeeded();
                 }
@@ -596,10 +601,10 @@ enum ReaderHTMLTemplate {
                     }
                 }
 
-                function currentHeadingId() {
+                function currentHeadingSnapshot() {
                     const headings = readerState.headings;
                     if (headings.length === 0) {
-                        return null;
+                        return { id: null, index: -1 };
                     }
 
                     refreshHeadingOffsetsIfNeeded();
@@ -620,28 +625,30 @@ enum ReaderHTMLTemplate {
                         }
                     }
 
-                    const currentIndex = readerState.activeHeadingId ? headings.findIndex((heading) => heading.id === readerState.activeHeadingId) : -1;
+                    const currentIndex = readerState.activeHeadingIndex;
                     if (currentIndex !== -1 && currentIndex !== bestIndex) {
                         const currentOffset = offsets[currentIndex] ?? 0;
                         const bestOffset = offsets[bestIndex] ?? 0;
                         if (Math.abs(bestOffset - targetOffset) < headingSwitchDeadband) {
-                            return headings[currentIndex]?.id || null;
+                            return { id: headings[currentIndex]?.id || null, index: currentIndex };
                         }
                         if (Math.abs(currentOffset - targetOffset) < headingSwitchDeadband) {
-                            return headings[currentIndex]?.id || null;
+                            return { id: headings[currentIndex]?.id || null, index: currentIndex };
                         }
                     }
 
-                    return headings[bestIndex]?.id || null;
+                    return { id: headings[bestIndex]?.id || null, index: bestIndex };
                 }
 
                 function postActiveHeading() {
-                    const nextHeadingId = currentHeadingId();
+                    const nextHeading = currentHeadingSnapshot();
+                    const nextHeadingId = nextHeading.id;
                     if (readerState.activeHeadingId === nextHeadingId) {
                         return;
                     }
 
                     readerState.activeHeadingId = nextHeadingId;
+                    readerState.activeHeadingIndex = nextHeading.index;
                     if (window.webkit?.messageHandlers?.readerActiveHeading) {
                         window.webkit.messageHandlers.readerActiveHeading.postMessage(nextHeadingId);
                     }
@@ -697,14 +704,19 @@ enum ReaderHTMLTemplate {
 
                 function clearSearchHighlights() {
                     const marks = Array.from(document.querySelectorAll('mark.search-hit'));
+                    const parentsToNormalize = new Set();
                     for (const mark of marks) {
                         const parent = mark.parentNode;
                         if (!parent) continue;
                         parent.replaceChild(document.createTextNode(mark.textContent || ''), mark);
+                        parentsToNormalize.add(parent);
+                    }
+                    for (const parent of parentsToNormalize) {
                         parent.normalize();
                     }
                     readerState.matches = [];
                     readerState.currentMatchIndex = 0;
+                    readerState.lastCurrentMatchIndex = 0;
                 }
 
                 function highlightNode(node, query) {
@@ -753,11 +765,17 @@ enum ReaderHTMLTemplate {
                 }
 
                 function updateCurrentSearchResult(scrollIntoView = true) {
-                    readerState.matches.forEach((mark, index) => {
-                        mark.classList.toggle('current', index === readerState.currentMatchIndex - 1);
-                    });
+                    const previous = readerState.matches[readerState.lastCurrentMatchIndex - 1];
+                    if (previous) {
+                        previous.classList.remove('current');
+                    }
 
                     const current = readerState.matches[readerState.currentMatchIndex - 1];
+                    if (current) {
+                        current.classList.add('current');
+                    }
+                    readerState.lastCurrentMatchIndex = readerState.currentMatchIndex;
+
                     if (scrollIntoView && current) {
                         withSmoothScroll(() => {
                             current.scrollIntoView({ behavior: 'smooth', block: 'center' });
