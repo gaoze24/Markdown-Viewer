@@ -2,52 +2,57 @@ import AppKit
 import SwiftUI
 
 enum AppTheme {
-    static let tint = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B)
-    static let windowBackground = dynamicColor(light: 0xF5F0E7, dark: 0x17120F)
-    static let detailBackground = dynamicColor(light: 0xF7F2E8, dark: 0x1A1511)
-    static let sidebarBackground = dynamicColor(light: 0xEEE5D9, dark: 0x15110E)
-    static let surface = dynamicColor(light: 0xF4EDE1, dark: 0x241D18)
-    static let elevatedSurface = dynamicColor(light: 0xF8F2E7, dark: 0x28211B)
-    static let chromeSurface = dynamicColor(light: 0xF2EADD, dark: 0x221B16)
-    static let iconTile = dynamicColor(light: 0xEBE1D2, dark: 0x2A211A)
-    static let rowHover = dynamicColor(light: 0xECE1D2, dark: 0x2C241D)
-    static let primaryText = dynamicColor(light: 0x2E261F, dark: 0xEEE3D6)
-    static let secondaryText = dynamicColor(light: 0x776B5F, dark: 0xB6A595)
-    static let tertiaryText = dynamicColor(light: 0x97887A, dark: 0x8F8073)
-    static let border = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.16, darkAlpha: 0.16)
-    static let softBorder = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.09, darkAlpha: 0.10)
-    static let divider = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.10, darkAlpha: 0.11)
-    static let warning = dynamicColor(light: 0xB16F49, dark: 0xD79267)
-    static let subtleAccentFill = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.08, darkAlpha: 0.12)
-    static let subtleAccentBorder = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.22, darkAlpha: 0.24)
-    static let controlHoverFill = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.10, darkAlpha: 0.15)
-    static let controlHoverBorder = dynamicColor(light: 0x8A6B48, dark: 0xC9A57B, lightAlpha: 0.18, darkAlpha: 0.20)
-    static let controlSubtleFill = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.05, darkAlpha: 0.08)
-    static let controlFill = dynamicColor(light: 0xFFF8EF, dark: 0x2E261F, lightAlpha: 0.92, darkAlpha: 0.96)
-    static let controlBorder = dynamicColor(light: 0x76624C, dark: 0xD8C4AB, lightAlpha: 0.24, darkAlpha: 0.22)
-    static let controlProminentFill = dynamicColor(light: 0x7A5D3D, dark: 0xD1AA7A)
-    static let controlProminentHoverFill = dynamicColor(light: 0x6B5135, dark: 0xE0B98A)
-    static let controlProminentText = dynamicColor(light: 0xFFF8EF, dark: 0x1F160F)
+    private static let accentLight: UInt32 = 0x7C5836
+    private static let accentDark: UInt32 = 0xD6B084
+    private static let inkLight: UInt32 = 0x5A4126
+    private static let inkDark: UInt32 = 0xE9D7BD
+
+    static let tint = dynamicColor(light: accentLight, dark: accentDark)
+    static let windowBackground = dynamicColor(light: 0xF1EADC, dark: 0x140F0B)
+    static let detailBackground = dynamicColor(light: 0xF4EEE2, dark: 0x171210)
+    static let sidebarBackground = dynamicColor(light: 0xE8DCCB, dark: 0x110D0A)
+    static let surface = dynamicColor(light: 0xFAF4EA, dark: 0x271F19)
+    static let elevatedSurface = dynamicColor(light: 0xFDF9F1, dark: 0x2D251E)
+    static let chromeSurface = dynamicColor(light: 0xF7F0E4, dark: 0x251E18)
+    static let iconTile = dynamicColor(light: 0xEDE1CF, dark: 0x312820)
+    static let rowHover = dynamicColor(light: 0xEADBC6, dark: 0x342A21)
+    static let primaryText = dynamicColor(light: 0x201810, dark: 0xF6EDE1)
+    static let secondaryText = dynamicColor(light: 0x5E5142, dark: 0xC9B9A6)
+    static let tertiaryText = dynamicColor(light: 0x7F6F5C, dark: 0xA1917E)
+    static let border = dynamicColor(light: inkLight, dark: inkDark, lightAlpha: 0.24, darkAlpha: 0.22)
+    static let softBorder = dynamicColor(light: inkLight, dark: inkDark, lightAlpha: 0.14, darkAlpha: 0.15)
+    static let divider = dynamicColor(light: inkLight, dark: inkDark, lightAlpha: 0.15, darkAlpha: 0.16)
+    static let warning = dynamicColor(light: 0xA85B30, dark: 0xE49A6A)
+    static let subtleAccentFill = dynamicColor(light: accentLight, dark: accentDark, lightAlpha: 0.11, darkAlpha: 0.17)
+    static let subtleAccentBorder = dynamicColor(light: accentLight, dark: accentDark, lightAlpha: 0.32, darkAlpha: 0.34)
+    static let controlHoverFill = dynamicColor(light: accentLight, dark: accentDark, lightAlpha: 0.13, darkAlpha: 0.19)
+    static let controlHoverBorder = dynamicColor(light: accentLight, dark: accentDark, lightAlpha: 0.26, darkAlpha: 0.28)
+    static let controlSubtleFill = dynamicColor(light: inkLight, dark: inkDark, lightAlpha: 0.08, darkAlpha: 0.11)
+    static let controlFill = dynamicColor(light: 0xFFFCF6, dark: 0x322A22, lightAlpha: 0.96, darkAlpha: 0.98)
+    static let controlBorder = dynamicColor(light: inkLight, dark: inkDark, lightAlpha: 0.30, darkAlpha: 0.26)
+    static let controlProminentFill = dynamicColor(light: 0x6E4E2E, dark: 0xDBB484)
+    static let controlProminentHoverFill = dynamicColor(light: 0x5B3E22, dark: 0xE9C292)
+    static let controlProminentText = dynamicColor(light: 0xFFFAF1, dark: 0x1A1208)
 
     static func outlineAccent(for level: Int) -> Color {
         switch level {
         case 1:
-            return dynamicColor(light: 0x8E6E4B, dark: 0xC7A37A)
+            return dynamicColor(light: 0x805B36, dark: 0xD2AC7E)
         case 2:
-            return dynamicColor(light: 0xA28663, dark: 0xB79A74)
+            return dynamicColor(light: 0x977A55, dark: 0xBE9F73)
         default:
-            return dynamicColor(light: 0xC4B39D, dark: 0x736555)
+            return dynamicColor(light: 0xB7A085, dark: 0x7C6C59)
         }
     }
 
     static func progressTint(for progress: Double) -> Color {
         switch progress {
         case ..<0.33:
-            return dynamicColor(light: 0xC39B6B, dark: 0xD1AE83)
+            return dynamicColor(light: 0xBE9159, dark: 0xD8B485)
         case ..<0.8:
-            return dynamicColor(light: 0x9A7A58, dark: 0xBC9870)
+            return dynamicColor(light: 0x8E6C49, dark: 0xC59B6E)
         default:
-            return dynamicColor(light: 0x7A6147, dark: 0xD2B188)
+            return dynamicColor(light: 0x6C5236, dark: 0xDBB98C)
         }
     }
 
