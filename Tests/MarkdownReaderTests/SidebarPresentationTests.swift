@@ -3,6 +3,33 @@ import ReaderCore
 @testable import MarkdownReader
 
 final class SidebarPresentationTests: XCTestCase {
+    func testLibraryPresentationAvoidsDuplicateRecentDocumentCopy() {
+        let populated = WelcomeLibraryPresentation.copy(recentFileCount: 1)
+
+        XCTAssertEqual(populated.title, "Continue Reading")
+        XCTAssertNil(populated.subtitle)
+        XCTAssertNil(populated.secondaryRecentSectionTitle)
+        XCTAssertNil(populated.emptySecondaryRecentNote)
+    }
+
+    func testLibraryPresentationKeepsSeparateRecentSectionOnlyForAdditionalFiles() {
+        let populated = WelcomeLibraryPresentation.copy(recentFileCount: 3)
+
+        XCTAssertEqual(populated.title, "Continue Reading")
+        XCTAssertNil(populated.subtitle)
+        XCTAssertEqual(populated.secondaryRecentSectionTitle, "Other Recent Files")
+        XCTAssertNil(populated.emptySecondaryRecentNote)
+    }
+
+    func testLibraryPresentationShowsOpeningGuidanceOnlyWhenEmpty() {
+        let empty = WelcomeLibraryPresentation.copy(recentFileCount: 0)
+
+        XCTAssertEqual(empty.title, "Markdown Reader")
+        XCTAssertEqual(empty.subtitle, "Open a local Markdown file to start reading.")
+        XCTAssertNil(empty.secondaryRecentSectionTitle)
+        XCTAssertNil(empty.emptySecondaryRecentNote)
+    }
+
     func testLibraryModeDoesNotRepeatRecentFilesInHeaderSubtitle() {
         XCTAssertNil(SidebarPresentation.subtitle(hasDocument: false, outlineIsEmpty: true))
         XCTAssertNil(SidebarPresentation.subtitle(hasDocument: false, outlineIsEmpty: false))

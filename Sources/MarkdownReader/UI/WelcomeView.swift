@@ -1,5 +1,32 @@
 import SwiftUI
 
+struct WelcomeLibraryCopy: Equatable {
+    let title: String
+    let subtitle: String?
+    let secondaryRecentSectionTitle: String?
+    let emptySecondaryRecentNote: String?
+}
+
+enum WelcomeLibraryPresentation {
+    static func copy(recentFileCount: Int) -> WelcomeLibraryCopy {
+        if recentFileCount == 0 {
+            return WelcomeLibraryCopy(
+                title: "Markdown Reader",
+                subtitle: "Open a local Markdown file to start reading.",
+                secondaryRecentSectionTitle: nil,
+                emptySecondaryRecentNote: nil
+            )
+        }
+
+        return WelcomeLibraryCopy(
+            title: "Continue Reading",
+            subtitle: nil,
+            secondaryRecentSectionTitle: recentFileCount > 1 ? "Other Recent Files" : nil,
+            emptySecondaryRecentNote: nil
+        )
+    }
+}
+
 struct WelcomeView: View {
     let recentFiles: [RecentFileItem]
     let errorMessage: String?
@@ -24,6 +51,10 @@ struct WelcomeView: View {
         remainingRecentFiles
     }
 
+    private var copy: WelcomeLibraryCopy {
+        WelcomeLibraryPresentation.copy(recentFileCount: recentFiles.count)
+    }
+
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
@@ -44,7 +75,7 @@ struct WelcomeView: View {
 
                     if recentFiles.isEmpty {
                         emptyLibrarySection
-                    } else {
+                    } else if !displayedRecentFiles.isEmpty {
                         recentFilesSection
                     }
 
@@ -67,13 +98,15 @@ struct WelcomeView: View {
                     .tracking(0.8)
                     .foregroundStyle(AppTheme.tertiaryText)
 
-                Text(recentFiles.isEmpty ? "No recent Markdown files" : "Recent Markdown Files")
+                Text(copy.title)
                     .font(.system(size: 27, weight: .semibold))
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text(statusLine)
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.secondaryText)
+                if let subtitle = copy.subtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
             }
 
             Spacer()
@@ -95,8 +128,6 @@ struct WelcomeView: View {
 
     private func continueReadingSection(item: RecentFileItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Continue Reading")
-
             LibraryFeatureRow(
                 item: item,
                 eyebrow: "Most recent",
@@ -109,33 +140,31 @@ struct WelcomeView: View {
 
     private var recentFilesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel(continueReadingItem == nil ? "Recent Markdown Files" : "More Recent Files")
+            if let secondaryRecentSectionTitle = copy.secondaryRecentSectionTitle {
+                sectionLabel(secondaryRecentSectionTitle)
+            }
 
-            if remainingRecentFiles.isEmpty, continueReadingItem != nil {
-                secondaryNote("The latest document is ready above.")
-                    .padding(.top, 2)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(displayedRecentFiles) { item in
-                        LibraryListRow(
-                            item: item,
-                            openAction: { openRecentAction(item) },
-                            removeAction: { removeRecentAction(item) }
-                        )
+            VStack(spacing: 0) {
+                ForEach(displayedRecentFiles) { item in
+                    LibraryListRow(
+                        item: item,
+                        openAction: { openRecentAction(item) },
+                        removeAction: { removeRecentAction(item) }
+                    )
 
-                        if item.id != displayedRecentFiles.last?.id {
-                            Divider()
-                                .padding(.leading, 52)
-                        }
+                    if item.id != displayedRecentFiles.last?.id {
+                        Divider()
+                            .padding(.leading, 52)
                     }
                 }
-                .background(AppTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(AppTheme.softBorder, lineWidth: 1)
-                )
             }
+            .background(AppTheme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(AppTheme.softBorder, lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 9, x: 0, y: 4)
         }
         .animation(.easeInOut(duration: 0.18), value: recentFiles.map(\.id))
     }
@@ -152,10 +181,10 @@ struct WelcomeView: View {
                     .background(AppTheme.iconTile, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Open a local Markdown file to start reading.")
+                    Text("Choose a Markdown document")
                         .font(.headline)
                         .foregroundStyle(AppTheme.primaryText)
-                    Text("Recent documents will appear here once you’ve opened a file. You can also drag a document into the window at any time.")
+                    Text("Recent documents appear here after you open them. You can also drag a file into the window at any time.")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
@@ -194,12 +223,6 @@ struct WelcomeView: View {
             .foregroundStyle(AppTheme.tertiaryText)
     }
 
-    private func secondaryNote(_ text: String) -> some View {
-        Text(text)
-            .font(.subheadline)
-            .foregroundStyle(AppTheme.secondaryText)
-    }
-
     private func inlineMessage(_ message: String, tint: Color) -> some View {
         HStack(spacing: 10) {
             Circle()
@@ -210,18 +233,6 @@ struct WelcomeView: View {
                 .foregroundStyle(tint)
         }
         .padding(.vertical, 3)
-    }
-
-    private var statusLine: String {
-        if recentFiles.isEmpty {
-            return "A quiet place to open and revisit local Markdown documents."
-        }
-
-        if recentFiles.count == 1 {
-            return "Your most recent document is ready to continue."
-        }
-
-        return "Pick up where you left off or open another document."
     }
 }
 
@@ -333,6 +344,7 @@ private struct LibraryFeatureRow: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(isHovered && item.isAvailable ? 0.12 : 0.07), radius: isHovered ? 16 : 10, x: 0, y: isHovered ? 8 : 5)
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.14)) {
