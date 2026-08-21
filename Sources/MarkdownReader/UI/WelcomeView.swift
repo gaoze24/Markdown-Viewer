@@ -3,8 +3,6 @@ import SwiftUI
 struct WelcomeLibraryCopy: Equatable {
     let title: String
     let subtitle: String?
-    let secondaryRecentSectionTitle: String?
-    let emptySecondaryRecentNote: String?
 }
 
 enum WelcomeLibraryPresentation {
@@ -12,17 +10,13 @@ enum WelcomeLibraryPresentation {
         if recentFileCount == 0 {
             return WelcomeLibraryCopy(
                 title: "Markdown Reader",
-                subtitle: "Open a local Markdown file to start reading.",
-                secondaryRecentSectionTitle: nil,
-                emptySecondaryRecentNote: nil
+                subtitle: "Open a local Markdown file to start reading."
             )
         }
 
         return WelcomeLibraryCopy(
             title: "Continue Reading",
-            subtitle: nil,
-            secondaryRecentSectionTitle: recentFileCount > 1 ? "Other Recent Files" : nil,
-            emptySecondaryRecentNote: nil
+            subtitle: nil
         )
     }
 }
@@ -38,17 +32,6 @@ struct WelcomeView: View {
 
     private var continueReadingItem: RecentFileItem? {
         recentFiles.first
-    }
-
-    private var remainingRecentFiles: [RecentFileItem] {
-        Array(recentFiles.dropFirst())
-    }
-
-    private var displayedRecentFiles: [RecentFileItem] {
-        // Always show what's *not* already featured. Falling back to the full
-        // list duplicated the most-recent file on the page when only one entry
-        // existed.
-        remainingRecentFiles
     }
 
     private var copy: WelcomeLibraryCopy {
@@ -75,8 +58,6 @@ struct WelcomeView: View {
 
                     if recentFiles.isEmpty {
                         emptyLibrarySection
-                    } else if !displayedRecentFiles.isEmpty {
-                        recentFilesSection
                     }
 
                     utilityStrip
@@ -136,37 +117,6 @@ struct WelcomeView: View {
                 removeAction: { removeRecentAction(item) }
             )
         }
-    }
-
-    private var recentFilesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let secondaryRecentSectionTitle = copy.secondaryRecentSectionTitle {
-                sectionLabel(secondaryRecentSectionTitle)
-            }
-
-            VStack(spacing: 0) {
-                ForEach(displayedRecentFiles) { item in
-                    LibraryListRow(
-                        item: item,
-                        openAction: { openRecentAction(item) },
-                        removeAction: { removeRecentAction(item) }
-                    )
-
-                    if item.id != displayedRecentFiles.last?.id {
-                        Divider()
-                            .padding(.leading, 52)
-                    }
-                }
-            }
-            .background(AppTheme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(AppTheme.softBorder, lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.05), radius: 9, x: 0, y: 4)
-        }
-        .animation(.easeInOut(duration: 0.18), value: recentFiles.map(\.id))
     }
 
     private var emptyLibrarySection: some View {
@@ -434,81 +384,3 @@ private struct LibraryFeatureRow: View {
     }
 }
 
-private struct LibraryListRow: View {
-    let item: RecentFileItem
-    let openAction: () -> Void
-    let removeAction: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        ZStack(alignment: .trailing) {
-            Button(action: openAction) {
-                rowContent
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .padding(.trailing, 34)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!item.isAvailable)
-
-            RecentFileRemoveButton(isVisible: isHovered, action: removeAction)
-                .padding(.trailing, 16)
-        }
-        .background(isHovered && item.isAvailable ? AppTheme.subtleAccentFill : .clear)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.12)) {
-                isHovered = hovering
-            }
-        }
-        .contextMenu {
-            recentFileContextMenu(for: item, openAction: openAction, removeAction: removeAction)
-        }
-    }
-
-    private var rowContent: some View {
-        HStack(spacing: 14) {
-            icon
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.name)
-                    .font(.headline)
-                    .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
-                    .lineLimit(1)
-                Text(item.path)
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 12)
-
-            if item.isAvailable {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.tertiaryText)
-                    .opacity(isHovered ? 1 : 0.55)
-            } else {
-                Text("Missing")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(AppTheme.warning)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var icon: some View {
-        if item.isAvailable {
-            Image(systemName: "doc.text")
-                .foregroundStyle(AppTheme.secondaryText)
-                .frame(width: 22)
-        } else {
-            Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(AppTheme.warning)
-                .frame(width: 22)
-        }
-    }
-}

@@ -40,7 +40,8 @@ struct RootView: View {
                         model: model,
                         searchState: searchState,
                         renderedDocument: renderedDocument,
-                        displaySettings: displaySettings
+                        displaySettings: displaySettings,
+                        showProgress: showProgress
                     )
                     .id(detailPageIdentity)
                     .transition(.opacity)
@@ -114,11 +115,11 @@ struct RootView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                if ToolbarProgressPresentation.isVisible(
-                    showProgressPreference: showProgress,
-                    hasDocument: model.hasDocument
-                ) {
-                    ToolbarProgressContainer(progressState: model.progressState)
+                if model.hasDocument {
+                    ToolbarDisplaySettingsButton(
+                        baseFontSize: $baseFontSize,
+                        readingWidth: $readingWidth
+                    )
                 }
 
                 ToolbarSearchField(
@@ -262,47 +263,65 @@ private struct ToolbarSubtitlePopover: View {
     }
 }
 
-private struct ToolbarProgressView: View {
-    let progress: Double
+private struct ToolbarDisplaySettingsButton: View {
+    @Binding var baseFontSize: Double
+    @Binding var readingWidth: Double
+
+    @State private var isShowingPopover = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            ZStack(alignment: .leading) {
-                Rectangle()
-                    .fill(AppTheme.divider)
-                    .frame(width: 48, height: 3)
+        Button {
+            isShowingPopover = true
+        } label: {
+            ToolbarIconGlyph(systemName: "textformat.size")
+        }
+        .buttonStyle(ToolbarIconButtonStyle())
+        .help("Display Settings")
+        .accessibilityLabel("Display Settings")
+        .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
+            ToolbarDisplaySettingsPopover(
+                baseFontSize: $baseFontSize,
+                readingWidth: $readingWidth
+            )
+        }
+    }
+}
 
-                Rectangle()
-                    .fill(progressTint)
-                    .frame(width: max(6, 48 * progress), height: 3)
+private struct ToolbarDisplaySettingsPopover: View {
+    @Binding var baseFontSize: Double
+    @Binding var readingWidth: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Font Size")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.primaryText)
+                Spacer()
+                Stepper(value: $baseFontSize, in: 15...24, step: 1) {
+                    Text("\(Int(baseFontSize)) pt")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .frame(width: 44, alignment: .trailing)
+                }
             }
 
-            Text("\(Int(progress * 100))%")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(AppTheme.secondaryText)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Reading Width")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.primaryText)
+                    Spacer()
+                    Text("\(Int(readingWidth)) px")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                Slider(value: $readingWidth, in: 640...1040, step: 20)
+            }
         }
-        .frame(minWidth: 90, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Reading progress")
-        .accessibilityValue("\(Int(progress * 100)) percent")
-    }
-
-    private var progressTint: Color {
-        AppTheme.progressTint(for: progress)
-    }
-}
-
-private struct ToolbarProgressContainer: View {
-    @ObservedObject var progressState: ReaderProgressState
-
-    var body: some View {
-        ToolbarProgressView(progress: progressState.scrollProgress)
-    }
-}
-
-enum ToolbarProgressPresentation {
-    static func isVisible(showProgressPreference: Bool, hasDocument: Bool) -> Bool {
-        showProgressPreference && hasDocument
+        .padding(16)
+        .frame(width: 240)
+        .background(AppTheme.elevatedSurface)
     }
 }
 

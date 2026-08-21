@@ -8,17 +8,13 @@ final class SidebarPresentationTests: XCTestCase {
 
         XCTAssertEqual(populated.title, "Continue Reading")
         XCTAssertNil(populated.subtitle)
-        XCTAssertNil(populated.secondaryRecentSectionTitle)
-        XCTAssertNil(populated.emptySecondaryRecentNote)
     }
 
-    func testLibraryPresentationKeepsSeparateRecentSectionOnlyForAdditionalFiles() {
+    func testLibraryPresentationTitleStaysConsistentForAnyRecentCount() {
         let populated = WelcomeLibraryPresentation.copy(recentFileCount: 3)
 
         XCTAssertEqual(populated.title, "Continue Reading")
         XCTAssertNil(populated.subtitle)
-        XCTAssertEqual(populated.secondaryRecentSectionTitle, "Other Recent Files")
-        XCTAssertNil(populated.emptySecondaryRecentNote)
     }
 
     func testLibraryPresentationShowsOpeningGuidanceOnlyWhenEmpty() {
@@ -26,8 +22,6 @@ final class SidebarPresentationTests: XCTestCase {
 
         XCTAssertEqual(empty.title, "Markdown Reader")
         XCTAssertEqual(empty.subtitle, "Open a local Markdown file to start reading.")
-        XCTAssertNil(empty.secondaryRecentSectionTitle)
-        XCTAssertNil(empty.emptySecondaryRecentNote)
     }
 
     func testLibraryModeDoesNotRepeatRecentFilesInHeaderSubtitle() {
@@ -47,27 +41,6 @@ final class SidebarPresentationTests: XCTestCase {
         )
         XCTAssertNil(ToolbarTitlePresentation.subtitlePopoverText(for: nil))
         XCTAssertNil(ToolbarTitlePresentation.subtitlePopoverText(for: ""))
-    }
-
-    func testToolbarProgressIsVisibleForDocumentEvenAtTop() {
-        XCTAssertTrue(
-            ToolbarProgressPresentation.isVisible(
-                showProgressPreference: true,
-                hasDocument: true
-            )
-        )
-        XCTAssertFalse(
-            ToolbarProgressPresentation.isVisible(
-                showProgressPreference: false,
-                hasDocument: true
-            )
-        )
-        XCTAssertFalse(
-            ToolbarProgressPresentation.isVisible(
-                showProgressPreference: true,
-                hasDocument: false
-            )
-        )
     }
 
     func testReaderReturnButtonOnlyShowsWhenDocumentIsOpen() {

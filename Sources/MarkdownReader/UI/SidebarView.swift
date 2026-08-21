@@ -50,8 +50,9 @@ struct SidebarView: View {
             List {
                 if model.hasDocument {
                     outlineSection
+                } else {
+                    recentFilesSection
                 }
-                recentFilesSection
             }
             .id(model.sidebarListIdentity)
             .scrollContentBackground(.hidden)
