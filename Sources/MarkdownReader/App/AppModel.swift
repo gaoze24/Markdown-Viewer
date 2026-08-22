@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct ReaderDisplaySettings: Equatable, Sendable {
     let baseFontSize: Double
     let readingWidth: Double
+    let colorTheme: ReaderColorTheme
 }
 
 struct RecentFileItem: Identifiable, Equatable {
@@ -15,6 +16,21 @@ struct RecentFileItem: Identifiable, Equatable {
     let path: String
     let url: URL
     let isAvailable: Bool
+
+    /// Where the file lives, for display next to `name`. Shows the containing
+    /// folder abbreviated with `~` — the full `path` repeats the file name and
+    /// is too long to read at a glance.
+    var displayLocation: String {
+        RecentFileLocationFormatter.location(forPath: path)
+    }
+}
+
+enum RecentFileLocationFormatter {
+    static func location(forPath path: String) -> String {
+        let directory = (path as NSString).deletingLastPathComponent
+        guard !directory.isEmpty else { return path }
+        return (directory as NSString).abbreviatingWithTildeInPath
+    }
 }
 
 enum SearchDirection: Equatable {

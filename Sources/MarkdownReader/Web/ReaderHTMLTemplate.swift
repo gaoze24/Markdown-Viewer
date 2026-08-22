@@ -3,6 +3,48 @@ import Foundation
 enum ReaderHTMLTemplate {
     static let mathPlaceholderClass = "math-placeholder"
 
+    /// Shared with both the `[data-theme="dark"]` override and the
+    /// `prefers-color-scheme: dark` auto-mode block so the two stay in sync.
+    fileprivate static let darkVariables = """
+    --page-bg: #101116;
+    --page-bg-secondary: #171922;
+    --text: #e9ebf1;
+    --muted: #9ca1ae;
+    --border: rgba(233, 235, 241, 0.16);
+    --soft-border: rgba(233, 235, 241, 0.085);
+    --surface-weak: rgba(255, 255, 255, 0.035);
+    --surface-strong: rgba(255, 255, 255, 0.055);
+    --blockquote-bg: rgba(160, 154, 255, 0.10);
+    --code-bg: rgba(255, 255, 255, 0.048);
+    --code-border: rgba(255, 255, 255, 0.10);
+    --table-row: rgba(255, 255, 255, 0.028);
+    --accent: #a7a2ff;
+    --accent-soft: rgba(167, 162, 255, 0.16);
+    --search-bg: rgba(214, 168, 64, 0.42);
+    --search-current: rgba(255, 190, 80, 0.62);
+    """
+
+    /// The warm "paper" reading theme. This used to be the app's only light
+    /// look; it is now one deliberate option beside the crisp default.
+    fileprivate static let sepiaVariables = """
+    --page-bg: #f7f1e5;
+    --page-bg-secondary: #efe7d8;
+    --text: #2a2118;
+    --muted: #6b5c4a;
+    --border: rgba(74, 54, 32, 0.20);
+    --soft-border: rgba(74, 54, 32, 0.11);
+    --surface-weak: rgba(253, 248, 240, 0.82);
+    --surface-strong: rgba(251, 246, 237, 0.95);
+    --blockquote-bg: rgba(150, 116, 76, 0.10);
+    --code-bg: rgba(86, 64, 40, 0.07);
+    --code-border: rgba(86, 64, 40, 0.15);
+    --table-row: rgba(86, 64, 40, 0.04);
+    --accent: #98622f;
+    --accent-soft: rgba(152, 98, 47, 0.13);
+    --search-bg: rgba(228, 184, 92, 0.46);
+    --search-current: rgba(214, 144, 58, 0.55);
+    """
+
     static func makeDocument(bodyHTML: String, settings: ReaderDisplaySettings) -> String {
         let mathAssets = BundledMathAssets.shared
         let includeMath = bodyHTML.contains(mathPlaceholderClass)
@@ -14,9 +56,11 @@ enum ReaderHTMLTemplate {
             ? "<script>\(mathAssets.katexScript)</script>"
             : ""
 
+        let themeAttribute = settings.colorTheme == .auto ? "" : " data-theme=\"\(settings.colorTheme.rawValue)\""
+
         return """
         <!doctype html>
-        <html lang="en">
+        <html lang="en"\(themeAttribute)>
         <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -26,49 +70,43 @@ enum ReaderHTMLTemplate {
                     color-scheme: light dark;
                     --reader-width: \(Int(settings.readingWidth))px;
                     --base-font-size: \(String(format: "%.1f", settings.baseFontSize))px;
-                    --viewport-padding-x: clamp(24px, 3.8vw, 52px);
-                    --viewport-padding-top: 40px;
-                    --viewport-padding-bottom: 88px;
-                    --block-space: 1.18em;
-                    --section-space: 2.12em;
-                    --page-bg: #f6f0e4;
-                    --page-bg-secondary: #efe7d8;
-                    --page-grid: rgba(93, 74, 53, 0.03);
-                    --text: #201810;
-                    --muted: #5d4f3f;
-                    --border: rgba(74, 54, 32, 0.22);
-                    --soft-border: rgba(74, 54, 32, 0.13);
-                    --surface-weak: rgba(253, 248, 240, 0.82);
-                    --surface-strong: rgba(247, 239, 228, 0.95);
-                    --blockquote-bg: rgba(150, 116, 76, 0.12);
-                    --code-bg: rgba(86, 64, 40, 0.10);
-                    --code-border: rgba(86, 64, 40, 0.18);
-                    --table-row: rgba(86, 64, 40, 0.05);
-                    --accent: #7c5836;
-                    --accent-soft: rgba(124, 88, 54, 0.16);
-                    --search-bg: rgba(228, 184, 92, 0.46);
-                    --search-current: rgba(214, 144, 58, 0.55);
+                    --viewport-padding-x: clamp(26px, 4vw, 56px);
+                    --viewport-padding-top: 44px;
+                    --viewport-padding-bottom: 96px;
+                    --block-space: 1.05em;
+                    --section-space: 1.92em;
+                    --font-body: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+                    --font-display: "SF Pro Display", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+                    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+                    --page-bg: #fdfdfe;
+                    --page-bg-secondary: #f4f5f9;
+                    --text: #15171c;
+                    --muted: #5f636e;
+                    --border: rgba(21, 23, 28, 0.13);
+                    --soft-border: rgba(21, 23, 28, 0.07);
+                    --surface-weak: rgba(255, 255, 255, 0.75);
+                    --surface-strong: #ffffff;
+                    --blockquote-bg: rgba(91, 84, 232, 0.05);
+                    --code-bg: rgba(23, 25, 35, 0.042);
+                    --code-border: rgba(23, 25, 35, 0.10);
+                    --table-row: rgba(23, 25, 35, 0.026);
+                    --accent: #5b54e8;
+                    --accent-soft: rgba(91, 84, 232, 0.12);
+                    --search-bg: rgba(255, 214, 102, 0.55);
+                    --search-current: rgba(255, 171, 64, 0.72);
+                }
+
+                :root[data-theme="sepia"] {
+                    \(ReaderHTMLTemplate.sepiaVariables)
+                }
+
+                :root[data-theme="dark"] {
+                    \(ReaderHTMLTemplate.darkVariables)
                 }
 
                 @media (prefers-color-scheme: dark) {
-                    :root {
-                        --page-bg: #16110d;
-                        --page-bg-secondary: #1d1712;
-                        --page-grid: rgba(241, 229, 214, 0.025);
-                        --text: #f5ece0;
-                        --muted: #c8b9a6;
-                        --border: rgba(238, 223, 204, 0.20);
-                        --soft-border: rgba(238, 223, 204, 0.11);
-                        --surface-weak: rgba(255, 246, 234, 0.04);
-                        --surface-strong: rgba(255, 245, 231, 0.07);
-                        --blockquote-bg: rgba(214, 176, 122, 0.11);
-                        --code-bg: rgba(255, 243, 228, 0.075);
-                        --code-border: rgba(255, 243, 228, 0.13);
-                        --table-row: rgba(255, 243, 228, 0.04);
-                        --accent: #d9b386;
-                        --accent-soft: rgba(217, 179, 134, 0.16);
-                        --search-bg: rgba(204, 156, 78, 0.42);
-                        --search-current: rgba(226, 176, 96, 0.58);
+                    :root:not([data-theme]) {
+                        \(ReaderHTMLTemplate.darkVariables)
                     }
                 }
 
@@ -84,16 +122,16 @@ enum ReaderHTMLTemplate {
                 }
 
                 html {
-                    background:
-                        linear-gradient(180deg, color-mix(in srgb, var(--page-bg-secondary) 70%, var(--page-bg) 30%) 0%, var(--page-bg) 18%, var(--page-bg) 100%);
+                    background: var(--page-bg);
                 }
 
                 body {
                     margin: 0;
                     color: var(--text);
-                    font-family: "New York", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", ui-serif, serif;
+                    font-family: var(--font-body);
                     font-size: var(--base-font-size);
                     line-height: 1.72;
+                    letter-spacing: -0.003em;
                     text-rendering: optimizeLegibility;
                     -webkit-font-smoothing: antialiased;
                     overflow-wrap: anywhere;
@@ -143,20 +181,34 @@ enum ReaderHTMLTemplate {
                 }
 
                 h1, h2, h3, h4, h5, h6 {
-                    font-family: "SF Pro Display", "Avenir Next", system-ui, sans-serif;
+                    font-family: var(--font-display);
                     color: var(--text);
-                    line-height: 1.18;
-                    letter-spacing: -0.03em;
-                    margin: var(--section-space) 0 0.72em;
+                    font-weight: 650;
+                    line-height: 1.25;
+                    letter-spacing: -0.021em;
+                    margin: var(--section-space) 0 0.62em;
                     position: relative;
                     scroll-margin-top: 74px;
                 }
 
-                h1 { font-size: 2.34em; margin-top: 0; margin-bottom: 0.82em; line-height: 1.1; }
-                h2 { font-size: 1.76em; }
-                h3 { font-size: 1.38em; }
-                h4 { font-size: 1.16em; }
-                h5, h6 { font-size: 1em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+                h1 {
+                    font-size: 2.05em;
+                    font-weight: 700;
+                    letter-spacing: -0.028em;
+                    line-height: 1.14;
+                    margin-top: 0;
+                    margin-bottom: 0.62em;
+                }
+                h2 { font-size: 1.48em; letter-spacing: -0.024em; }
+                h3 { font-size: 1.19em; }
+                h4 { font-size: 1.04em; }
+                h5, h6 {
+                    font-size: 0.86em;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.07em;
+                    color: var(--muted);
+                }
 
                 p, ul, ol, blockquote, pre, .table-wrap, .details-block, .math-block-source {
                     margin: var(--block-space) 0;
@@ -168,22 +220,24 @@ enum ReaderHTMLTemplate {
 
                 a {
                     color: var(--accent);
-                    text-decoration: none;
+                    text-decoration: underline;
+                    text-decoration-thickness: 1px;
+                    text-underline-offset: 0.18em;
+                    text-decoration-color: color-mix(in srgb, var(--accent) 34%, transparent);
                     font-weight: 500;
-                    border-bottom: 1px solid color-mix(in srgb, var(--accent) 48%, transparent);
+                    transition: text-decoration-color 120ms ease;
                 }
 
                 a:hover {
-                    color: color-mix(in srgb, var(--accent) 88%, var(--text) 12%);
-                    border-bottom-color: var(--accent);
+                    text-decoration-color: var(--accent);
                 }
 
                 .heading-anchor {
                     position: absolute;
-                    left: -1.05em;
+                    left: -0.92em;
                     opacity: 0;
-                    border-bottom: none;
-                    color: color-mix(in srgb, var(--accent) 72%, white 10%);
+                    text-decoration: none;
+                    color: color-mix(in srgb, var(--accent) 55%, transparent);
                     transition: opacity 120ms ease;
                     font-weight: 500;
                 }
@@ -198,11 +252,12 @@ enum ReaderHTMLTemplate {
                 }
 
                 blockquote {
-                    padding: 0.4em 0 0.4em 1.18em;
-                    border-left: 3px solid color-mix(in srgb, var(--accent) 60%, transparent);
+                    padding: 0.5em 0 0.5em 1.15em;
+                    border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
                     background: var(--blockquote-bg);
-                    border-radius: 0 14px 14px 0;
-                    margin: 1.3em 0 1.38em;
+                    border-radius: 0 10px 10px 0;
+                    margin: 1.25em 0 1.32em;
+                    color: var(--muted);
                 }
 
                 blockquote > :first-child {
@@ -213,9 +268,21 @@ enum ReaderHTMLTemplate {
                     margin-bottom: 0.76em;
                 }
 
+                /* Lead paragraph: the opening line after the document title
+                   reads as a standfirst rather than plain body copy. */
+                .reader-content > h1 + p {
+                    font-size: 1.075em;
+                    line-height: 1.62;
+                    color: var(--muted);
+                }
+
                 ul, ol {
                     margin: 1.08em 0 1.24em;
                     padding-left: 1.45em;
+                }
+
+                li::marker {
+                    color: color-mix(in srgb, var(--accent) 70%, var(--muted));
                 }
 
                 li + li {
@@ -253,12 +320,11 @@ enum ReaderHTMLTemplate {
                 }
 
                 code {
-                    font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
-                    font-size: 0.88em;
+                    font-family: var(--font-mono);
+                    font-size: 0.855em;
                     background: var(--code-bg);
-                    border: 1px solid var(--code-border);
-                    border-radius: 0.5em;
-                    padding: 0.15em 0.45em;
+                    border-radius: 0.38em;
+                    padding: 0.14em 0.38em;
                 }
 
                 pre.code-block {
@@ -266,11 +332,11 @@ enum ReaderHTMLTemplate {
                     max-width: 100%;
                     overflow-x: auto;
                     overflow-y: hidden;
-                    padding: 18px 20px;
-                    background: color-mix(in srgb, var(--code-bg) 94%, var(--page-bg) 6%);
+                    padding: 16px 18px;
+                    background: var(--code-bg);
                     border: 1px solid var(--code-border);
-                    border-radius: 14px;
-                    margin: 1.3em 0 1.42em;
+                    border-radius: 12px;
+                    margin: 1.24em 0 1.34em;
                 }
 
                 pre code {
@@ -280,15 +346,15 @@ enum ReaderHTMLTemplate {
                     border: none;
                     background: transparent;
                     padding: 0;
-                    line-height: 1.62;
-                    font-size: 0.85em;
+                    line-height: 1.65;
+                    font-size: 0.845em;
                 }
 
                 hr {
                     border: none;
                     height: 1px;
-                    margin: 2.45em 0;
-                    background: var(--border);
+                    margin: 2.3em 0;
+                    background: var(--soft-border);
                 }
 
                 .table-wrap {
@@ -297,43 +363,46 @@ enum ReaderHTMLTemplate {
                     overflow-x: auto;
                     overflow-y: hidden;
                     border: 1px solid var(--soft-border);
-                    border-radius: 14px;
-                    background: color-mix(in srgb, var(--surface-strong) 90%, var(--page-bg) 10%);
-                    margin: 1.28em 0 1.4em;
+                    border-radius: 12px;
+                    background: var(--surface-strong);
+                    margin: 1.24em 0 1.36em;
                 }
 
                 table {
                     width: max-content;
                     min-width: 100%;
                     border-collapse: collapse;
+                    font-size: 0.94em;
                 }
 
                 thead th {
-                    font-family: "SF Pro Text", system-ui, sans-serif;
-                    font-size: 0.83em;
-                    letter-spacing: 0.04em;
+                    font-size: 0.76em;
+                    font-weight: 600;
+                    letter-spacing: 0.07em;
                     text-transform: uppercase;
                     color: var(--muted);
-                    background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+                    background: transparent;
+                    border-bottom: 1px solid var(--border);
+                    white-space: nowrap;
                 }
 
                 th, td {
-                    padding: 12px 14px;
+                    padding: 11px 15px;
                     border-bottom: 1px solid var(--soft-border);
                     vertical-align: top;
                 }
 
-                tbody tr:nth-child(even) {
-                    background: var(--table-row);
+                tbody tr:last-child td {
+                    border-bottom: none;
                 }
 
                 img {
                     max-width: 100%;
                     height: auto;
-                    border-radius: 16px;
+                    border-radius: 12px;
                     display: block;
                     margin: 1.2em auto;
-                    box-shadow: 0 10px 22px rgba(59, 45, 33, 0.07);
+                    box-shadow: 0 6px 20px rgba(15, 17, 22, 0.08);
                 }
 
                 .inline-image {
@@ -342,14 +411,13 @@ enum ReaderHTMLTemplate {
 
                 .details-block details {
                     border: 1px solid var(--soft-border);
-                    border-radius: 14px;
-                    padding: 14px 18px;
-                    background: color-mix(in srgb, var(--surface-strong) 92%, var(--page-bg) 8%);
+                    border-radius: 12px;
+                    padding: 13px 16px;
+                    background: var(--surface-weak);
                 }
 
                 .details-block summary {
                     cursor: pointer;
-                    font-family: "SF Pro Text", system-ui, sans-serif;
                     font-weight: 600;
                 }
 
@@ -423,13 +491,13 @@ enum ReaderHTMLTemplate {
 
                 @media (max-width: 880px) {
                     :root {
-                        --viewport-padding-x: 20px;
-                        --viewport-padding-top: 30px;
-                        --viewport-padding-bottom: 72px;
+                        --viewport-padding-x: 22px;
+                        --viewport-padding-top: 32px;
+                        --viewport-padding-bottom: 76px;
                     }
 
-                    h1 { font-size: 2.05em; }
-                    h2 { font-size: 1.58em; }
+                    h1 { font-size: 1.86em; }
+                    h2 { font-size: 1.38em; }
                 }
             </style>
             \(CodeHighlightingAssets.style)
@@ -655,9 +723,14 @@ enum ReaderHTMLTemplate {
                     }
                 }
 
-                function applyDisplaySettings(fontSize, width) {
+                function applyDisplaySettings(fontSize, width, colorTheme) {
                     document.documentElement.style.setProperty('--base-font-size', `${fontSize}px`);
                     document.documentElement.style.setProperty('--reader-width', `${width}px`);
+                    if (colorTheme && colorTheme !== 'auto') {
+                        document.documentElement.setAttribute('data-theme', colorTheme);
+                    } else {
+                        document.documentElement.removeAttribute('data-theme');
+                    }
                     requestAnimationFrame(() => {
                         markMetricsDirty();
                         markHeadingsDirty();

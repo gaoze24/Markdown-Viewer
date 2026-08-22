@@ -87,7 +87,7 @@ private struct ReaderProgressEdgeBar: View {
                     .fill(AppTheme.divider)
 
                 Rectangle()
-                    .fill(AppTheme.progressTint(for: progressState.scrollProgress))
+                    .fill(AppTheme.tint)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .scaleEffect(x: max(0, min(1, progressState.scrollProgress)), y: 1, anchor: .leading)
             }

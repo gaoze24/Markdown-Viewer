@@ -2,30 +2,56 @@ enum CodeHighlightingAssets {
     static let style = #"""
     <style>
         :root {
-            --syntax-keyword: #8f4f76;
-            --syntax-string: #7c6f2c;
-            --syntax-comment: #8f8478;
-            --syntax-number: #a15f3b;
-            --syntax-type: #4f718b;
-            --syntax-function: #8b623e;
+            --syntax-keyword: #8250df;
+            --syntax-string: #0a7b57;
+            --syntax-comment: #8b9099;
+            --syntax-number: #bc4c00;
+            --syntax-type: #0369a1;
+            --syntax-function: #4f46e5;
+            --syntax-operator: #57606a;
+            --syntax-attribute: #b45309;
+            --syntax-tag: #1d4ed8;
+            --syntax-literal: #be123c;
+        }
+
+        :root[data-theme="sepia"] {
+            --syntax-keyword: #8a4a72;
+            --syntax-string: #63702f;
+            --syntax-comment: #93887b;
+            --syntax-number: #a4602f;
+            --syntax-type: #4a6f8a;
+            --syntax-function: #7a5a95;
             --syntax-operator: #7b6654;
-            --syntax-attribute: #73663d;
-            --syntax-tag: #6b6f95;
+            --syntax-attribute: #8a6a2f;
+            --syntax-tag: #4a6f8a;
             --syntax-literal: #9a5b55;
         }
 
+        :root[data-theme="dark"] {
+            --syntax-keyword: #c8a5ff;
+            --syntax-string: #7ee7a8;
+            --syntax-comment: #7d8590;
+            --syntax-number: #ffab70;
+            --syntax-type: #79c0ff;
+            --syntax-function: #a5a0ff;
+            --syntax-operator: #b0b6c0;
+            --syntax-attribute: #ffd580;
+            --syntax-tag: #79c0ff;
+            --syntax-literal: #ff9ba8;
+        }
+
         @media (prefers-color-scheme: dark) {
-            :root {
-                --syntax-keyword: #d897bd;
-                --syntax-string: #c7b66b;
-                --syntax-comment: #8f8173;
-                --syntax-number: #d69b73;
-                --syntax-type: #92bfd5;
-                --syntax-function: #d2ad78;
-                --syntax-operator: #bca895;
-                --syntax-attribute: #c4b87a;
-                --syntax-tag: #a9acd9;
-                --syntax-literal: #d88c84;
+            :root:not([data-theme]) {
+                --syntax-keyword: #c8a5ff;
+                --syntax-string: #7ee7a8;
+                --syntax-comment: #7d8590;
+                --syntax-number: #ffab70;
+                --syntax-type: #79c0ff;
+                --syntax-function: #a5a0ff;
+                --syntax-operator: #b0b6c0;
+                --syntax-attribute: #ffd580;
+                --syntax-tag: #79c0ff;
+                --syntax-literal: #ff9ba8;
             }
         }
 

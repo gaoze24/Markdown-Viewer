@@ -62,11 +62,13 @@ struct WelcomeView: View {
 
                     utilityStrip
                 }
-                .frame(maxWidth: 920, alignment: .leading)
-                .padding(.horizontal, 34)
-                .padding(.top, 30)
-                .padding(.bottom, 36)
-                .frame(maxWidth: .infinity, minHeight: max(proxy.size.height - 12, 620), alignment: .top)
+                .frame(maxWidth: 760, alignment: .leading)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 48)
+                // Centered rather than top-pinned: this page only ever holds a
+                // short stack (header + one hero card), which left a large dead
+                // zone underneath when anchored to the top.
+                .frame(maxWidth: .infinity, minHeight: max(proxy.size.height - 12, 480), alignment: .center)
             }
         }
     }
@@ -320,10 +322,11 @@ private struct LibraryFeatureRow: View {
                     .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
                     .lineLimit(1)
 
-                Text(item.path)
+                Text(item.displayLocation)
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             Spacer(minLength: 20)

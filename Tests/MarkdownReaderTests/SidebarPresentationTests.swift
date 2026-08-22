@@ -24,6 +24,23 @@ final class SidebarPresentationTests: XCTestCase {
         XCTAssertEqual(empty.subtitle, "Open a local Markdown file to start reading.")
     }
 
+    func testRecentFileLocationShowsAbbreviatedFolderWithoutRepeatingFileName() {
+        let home = NSHomeDirectory()
+
+        XCTAssertEqual(
+            RecentFileLocationFormatter.location(forPath: "\(home)/Projects/Notes/plan.md"),
+            "~/Projects/Notes"
+        )
+        XCTAssertEqual(
+            RecentFileLocationFormatter.location(forPath: "/tmp/plan.md"),
+            "/tmp"
+        )
+    }
+
+    func testRecentFileLocationFallsBackWhenPathHasNoFolder() {
+        XCTAssertEqual(RecentFileLocationFormatter.location(forPath: "plan.md"), "plan.md")
+    }
+
     func testLibraryModeDoesNotRepeatRecentFilesInHeaderSubtitle() {
         XCTAssertNil(SidebarPresentation.subtitle(hasDocument: false, outlineIsEmpty: true))
         XCTAssertNil(SidebarPresentation.subtitle(hasDocument: false, outlineIsEmpty: false))

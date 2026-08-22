@@ -2,22 +2,24 @@ import ReaderCore
 import SwiftUI
 
 private enum OutlineLayout {
-    static let rowInsets = EdgeInsets(top: 3, leading: 4, bottom: 3, trailing: 6)
-    static let depthIndent: CGFloat = 11
+    // The left gutter (indent + disclosure slot + padding) is pure overhead on
+    // every row, and in a narrow sidebar it is what forces long headings to
+    // wrap. Each value here is kept as tight as it can be while still leaving
+    // the chevron comfortably clickable.
+    static let rowInsets = EdgeInsets(top: 1, leading: 2, bottom: 1, trailing: 4)
+    static let depthIndent: CGFloat = 10
     static let hierarchyGuideWidth: CGFloat = 1
-    static let hierarchyGuideHeight: CGFloat = 18
+    static let hierarchyGuideHeight: CGFloat = 15
     static let hierarchyGuideCornerRadius: CGFloat = 0.5
-    static let disclosureSlot: CGFloat = 16
-    static let leafDisclosureSlot: CGFloat = 16
-    static let disclosureIconSize: CGFloat = 10
-    static let disclosureTapHeight: CGFloat = 24
-    static let disclosureToLabelSpacing: CGFloat = 4
-    static let labelSpacing: CGFloat = 8
-    static let labelVerticalPadding: CGFloat = 6
-    static let labelLeadingPadding: CGFloat = 4
+    static let disclosureSlot: CGFloat = 13
+    static let leafDisclosureSlot: CGFloat = 13
+    static let disclosureIconSize: CGFloat = 9
+    static let disclosureTapHeight: CGFloat = 22
+    static let disclosureToLabelSpacing: CGFloat = 2
+    static let labelVerticalPadding: CGFloat = 4
+    static let labelLeadingPadding: CGFloat = 7
     static let labelTrailingPadding: CGFloat = 6
-    static let selectionCornerRadius: CGFloat = 8
-    static let accentWidth: CGFloat = 2.5
+    static let selectionCornerRadius: CGFloat = 7
     static let headerSpacing: CGFloat = 8
     static let headerBottomPadding: CGFloat = 4
     static let headerMenuIconSize: CGFloat = 13
@@ -57,7 +59,9 @@ struct SidebarView: View {
             .id(model.sidebarListIdentity)
             .scrollContentBackground(.hidden)
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 252, ideal: 288)
+            // A slightly wider default buys real text width in the outline,
+            // which is what keeps long headings from wrapping.
+            .navigationSplitViewColumnWidth(min: 244, ideal: 304)
             .animation(.easeInOut(duration: 0.16), value: model.outlineStructureToken)
             .animation(.easeInOut(duration: 0.18), value: model.recentFiles.count)
         }
@@ -222,30 +226,23 @@ private struct OutlineSidebarRow: View {
             leadingAccessory
 
             Button(action: selectAction) {
-                HStack(alignment: .center, spacing: OutlineLayout.labelSpacing) {
-                    Capsule()
-                        .fill(accent(for: row.level))
-                        .frame(width: OutlineLayout.accentWidth, height: accentHeight)
-                        .opacity(accentOpacity)
-
-                    Text(row.title)
-                        .font(labelFont)
-                        .foregroundStyle(labelColor)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, OutlineLayout.labelVerticalPadding)
-                .padding(.leading, OutlineLayout.labelLeadingPadding)
-                .padding(.trailing, OutlineLayout.labelTrailingPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(backgroundStyle, in: RoundedRectangle(cornerRadius: OutlineLayout.selectionCornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: OutlineLayout.selectionCornerRadius, style: .continuous)
-                        .strokeBorder(borderStyle, lineWidth: borderWidth)
-                )
+                Text(row.title)
+                    .font(labelFont)
+                    .foregroundStyle(labelColor)
+                    .lineLimit(2)
+                    .allowsTightening(true)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, OutlineLayout.labelVerticalPadding)
+                    .padding(.leading, OutlineLayout.labelLeadingPadding)
+                    .padding(.trailing, OutlineLayout.labelTrailingPadding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(backgroundStyle, in: RoundedRectangle(cornerRadius: OutlineLayout.selectionCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
+            // Headings longer than two lines still truncate; the tooltip keeps
+            // the full text reachable.
+            .help(row.title)
         }
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -312,7 +309,7 @@ private struct OutlineSidebarRow: View {
 
     private var labelColor: Color {
         if isActive {
-            return AppTheme.primaryText
+            return AppTheme.tint
         }
 
         if hasActiveDescendant || row.depth == 0 {
@@ -322,35 +319,9 @@ private struct OutlineSidebarRow: View {
         return AppTheme.secondaryText
     }
 
-    private var accentHeight: CGFloat {
-        switch row.level {
-        case 1:
-            return 16
-        case 2:
-            return 13
-        default:
-            return 10
-        }
-    }
-
-    private var accentOpacity: Double {
-        switch row.level {
-        case 1:
-            return 1
-        case 2:
-            return 0.86
-        default:
-            return 0.68
-        }
-    }
-
     private var backgroundStyle: Color {
         if isActive {
             return AppTheme.subtleAccentFill
-        }
-
-        if hasActiveDescendant {
-            return AppTheme.subtleAccentFill.opacity(0.45)
         }
 
         if isHovered {
@@ -360,17 +331,9 @@ private struct OutlineSidebarRow: View {
         return .clear
     }
 
-    private var borderStyle: Color {
-        isActive ? AppTheme.subtleAccentBorder : .clear
-    }
-
-    private var borderWidth: CGFloat {
-        isActive ? 1 : 0
-    }
-
     private var hierarchyGuideColor: Color {
-        if hasActiveDescendant {
-            return AppTheme.subtleAccentBorder.opacity(0.6)
+        if hasActiveDescendant || isActive {
+            return AppTheme.subtleAccentBorder
         }
 
         return AppTheme.softBorder
@@ -396,9 +359,6 @@ private struct OutlineSidebarRow: View {
         return .clear
     }
 
-    private func accent(for level: Int) -> Color {
-        AppTheme.outlineAccent(for: level)
-    }
 }
 
 private struct SidebarRecentFileRow: View {
@@ -419,10 +379,11 @@ private struct SidebarRecentFileRow: View {
                             .foregroundStyle(item.isAvailable ? AppTheme.primaryText : AppTheme.secondaryText)
                     }
 
-                    Text(item.path)
+                    Text(item.displayLocation)
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 6)

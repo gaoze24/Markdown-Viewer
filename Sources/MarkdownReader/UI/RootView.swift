@@ -16,6 +16,7 @@ struct RootView: View {
     @AppStorage(ReaderPreferenceKey.baseFontSize) private var baseFontSize = 18.0
     @AppStorage(ReaderPreferenceKey.readingWidth) private var readingWidth = 820.0
     @AppStorage(ReaderPreferenceKey.showProgress) private var showProgress = true
+    @AppStorage(ReaderPreferenceKey.colorTheme) private var colorTheme = ReaderColorTheme.auto
 
     @State private var splitViewVisibility: NavigationSplitViewVisibility = .all
     @State private var isDropTargeted = false
@@ -26,7 +27,7 @@ struct RootView: View {
     }
 
     private var displaySettings: ReaderDisplaySettings {
-        ReaderDisplaySettings(baseFontSize: baseFontSize, readingWidth: readingWidth)
+        ReaderDisplaySettings(baseFontSize: baseFontSize, readingWidth: readingWidth, colorTheme: colorTheme)
     }
 
     var body: some View {
@@ -118,7 +119,8 @@ struct RootView: View {
                 if model.hasDocument {
                     ToolbarDisplaySettingsButton(
                         baseFontSize: $baseFontSize,
-                        readingWidth: $readingWidth
+                        readingWidth: $readingWidth,
+                        colorTheme: $colorTheme
                     )
                 }
 
@@ -266,6 +268,7 @@ private struct ToolbarSubtitlePopover: View {
 private struct ToolbarDisplaySettingsButton: View {
     @Binding var baseFontSize: Double
     @Binding var readingWidth: Double
+    @Binding var colorTheme: ReaderColorTheme
 
     @State private var isShowingPopover = false
 
@@ -281,7 +284,8 @@ private struct ToolbarDisplaySettingsButton: View {
         .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
             ToolbarDisplaySettingsPopover(
                 baseFontSize: $baseFontSize,
-                readingWidth: $readingWidth
+                readingWidth: $readingWidth,
+                colorTheme: $colorTheme
             )
         }
     }
@@ -290,9 +294,27 @@ private struct ToolbarDisplaySettingsButton: View {
 private struct ToolbarDisplaySettingsPopover: View {
     @Binding var baseFontSize: Double
     @Binding var readingWidth: Double
+    @Binding var colorTheme: ReaderColorTheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Theme")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.primaryText)
+                HStack(spacing: 4) {
+                    ForEach(ReaderColorTheme.allCases) { theme in
+                        ThemeSwatchButton(
+                            theme: theme,
+                            isSelected: theme == colorTheme,
+                            action: { colorTheme = theme }
+                        )
+                    }
+                }
+            }
+
+            Divider()
+
             HStack {
                 Text("Font Size")
                     .font(.subheadline)
@@ -322,6 +344,60 @@ private struct ToolbarDisplaySettingsPopover: View {
         .padding(16)
         .frame(width: 240)
         .background(AppTheme.elevatedSurface)
+    }
+}
+
+private struct ThemeSwatchButton: View {
+    let theme: ReaderColorTheme
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle()
+                        .strokeBorder(isSelected ? AppTheme.tint : .clear, lineWidth: 2)
+                        .frame(width: 29, height: 29)
+
+                    swatch
+                        .frame(width: 22, height: 22)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle().strokeBorder(AppTheme.controlBorder, lineWidth: 1)
+                        )
+                }
+                .frame(width: 30, height: 30)
+
+                Text(theme.displayName)
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? AppTheme.tint : AppTheme.secondaryText)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(theme.displayName)
+        .accessibilityLabel(theme.displayName)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    /// Mirrors the actual page backgrounds defined in `ReaderHTMLTemplate`.
+    @ViewBuilder
+    private var swatch: some View {
+        switch theme {
+        case .auto:
+            HStack(spacing: 0) {
+                Color(red: 0.992, green: 0.992, blue: 0.996)
+                Color(red: 0.063, green: 0.067, blue: 0.086)
+            }
+        case .sepia:
+            Color(red: 0.969, green: 0.945, blue: 0.898)
+        case .light:
+            Color(red: 0.992, green: 0.992, blue: 0.996)
+        case .dark:
+            Color(red: 0.063, green: 0.067, blue: 0.086)
+        }
     }
 }
 

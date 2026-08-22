@@ -5,7 +5,7 @@ final class ReaderHTMLTemplateTests: XCTestCase {
     func testReaderScriptCachesCurrentSearchAndHeadingStateForLargeDocuments() {
         let html = ReaderHTMLTemplate.makeDocument(
             bodyHTML: "<h1 id=\"intro\">Intro</h1><p>Hello reader.</p>",
-            settings: ReaderDisplaySettings(baseFontSize: 18, readingWidth: 820)
+            settings: ReaderDisplaySettings(baseFontSize: 18, readingWidth: 820, colorTheme: .auto)
         )
 
         XCTAssertTrue(html.contains("lastCurrentMatchIndex"))
@@ -17,7 +17,7 @@ final class ReaderHTMLTemplateTests: XCTestCase {
             bodyHTML: """
             <pre class="code-block"><code class="language-go">for {}</code></pre>
             """,
-            settings: ReaderDisplaySettings(baseFontSize: 18, readingWidth: 820)
+            settings: ReaderDisplaySettings(baseFontSize: 18, readingWidth: 820, colorTheme: .auto)
         )
 
         XCTAssertTrue(html.contains("function highlightCodeBlocks()"))
@@ -43,7 +43,7 @@ final class ReaderHTMLTemplateTests: XCTestCase {
                 }
             }</code></pre>
             """,
-            settings: ReaderDisplaySettings(baseFontSize: 18, readingWidth: 820)
+            settings: ReaderDisplaySettings(baseFontSize: 18, readingWidth: 820, colorTheme: .auto)
         )
 
         XCTAssertTrue(html.contains("function inferSyntaxLanguage(source, documentHint)"))

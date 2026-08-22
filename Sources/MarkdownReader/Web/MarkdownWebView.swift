@@ -104,7 +104,12 @@ struct MarkdownWebView: NSViewRepresentable {
         func applyDisplaySettingsIfNeeded(on webView: WKWebView) {
             guard isLoaded, lastDisplaySettings != parent.displaySettings else { return }
             lastDisplaySettings = parent.displaySettings
-            let script = "window.reader.applyDisplaySettings(\(parent.displaySettings.baseFontSize), \(parent.displaySettings.readingWidth));"
+            let script = """
+            window.reader.applyDisplaySettings(\
+            \(parent.displaySettings.baseFontSize), \
+            \(parent.displaySettings.readingWidth), \
+            \(quoted(parent.displaySettings.colorTheme.rawValue)));
+            """
             webView.evaluateJavaScript(script)
         }
 
