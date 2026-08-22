@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8078FF"/>
+      <stop offset="0.55" stop-color="#5B54E8"/>
+      <stop offset="1" stop-color="#4038C9"/>
+    </linearGradient>
+
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.30"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EFF0F7"/>
+    </linearGradient>
+
+    <filter id="bodyShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#1A1440" flood-opacity="0.34"/>
+    </filter>
+
+    <filter id="pageShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#241C5C" flood-opacity="0.30"/>
+    </filter>
+
+    <filter id="badgeShadow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#1A1440" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded-square app body on the macOS icon grid (824pt inside a 1024 canvas) -->
+  <g filter="url(#bodyShadow)">
+    <rect x="100" y="90" width="824" height="824" rx="185" ry="185" fill="url(#body)"/>
+    <rect x="100" y="90" width="824" height="824" rx="185" ry="185" fill="url(#sheen)"/>
+  </g>
+
+  <!-- The page being read -->
+  <g filter="url(#pageShadow)">
+    <rect x="317" y="255" width="390" height="484" rx="44" ry="44" fill="url(#page)"/>
+  </g>
+
+  <!-- Heading bar, then body copy lines -->
+  <rect x="372" y="330" width="196" height="34" rx="17" fill="#5B54E8"/>
+  <rect x="372" y="404" width="280" height="20" rx="10" fill="#C9CBDE"/>
+  <rect x="372" y="452" width="248" height="20" rx="10" fill="#C9CBDE"/>
+  <rect x="372" y="500" width="272" height="20" rx="10" fill="#C9CBDE"/>
+  <rect x="372" y="548" width="180" height="20" rx="10" fill="#C9CBDE"/>
+
+  <!-- Markdown cue: a caret badge. Deliberately a chevron rather than a
+       stemmed arrow, which reads as "download" instead of "markdown". -->
+  <g filter="url(#badgeShadow)">
+    <circle cx="700" cy="702" r="96" fill="#2A2178"/>
+    <path d="M654 678 L700 726 L746 678" fill="none" stroke="#FFFFFF" stroke-width="36"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

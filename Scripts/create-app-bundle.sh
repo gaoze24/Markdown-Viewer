@@ -20,6 +20,12 @@ for bundle in "$BIN_PATH"/*.bundle(N); do
     cp -R "$bundle" "$OUTPUT_DIR/Contents/Resources/"
 done
 
+if [[ -f "${ROOT_DIR}/Design/AppIcon.icns" ]]; then
+    cp "${ROOT_DIR}/Design/AppIcon.icns" "$OUTPUT_DIR/Contents/Resources/AppIcon.icns"
+else
+    echo "warning: Design/AppIcon.icns is missing; run Scripts/make-icon.sh" >&2
+fi
+
 cat > "$OUTPUT_DIR/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -31,6 +37,8 @@ cat > "$OUTPUT_DIR/Contents/Info.plist" <<'PLIST'
     <string>Markdown Reader</string>
     <key>CFBundleExecutable</key>
     <string>Markdown Reader</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.local.MarkdownReader</string>
     <key>CFBundleInfoDictionaryVersion</key>
