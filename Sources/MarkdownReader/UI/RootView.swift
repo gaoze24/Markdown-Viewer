@@ -6,7 +6,10 @@ private enum ToolbarLayout {
     static let iconSize: CGFloat = 14
     static let iconButtonWidth: CGFloat = 36
     static let iconButtonHeight: CGFloat = 30
-    static let iconButtonCornerRadius: CGFloat = 9
+    /// Holds the hover fill inside the capsule the toolbar draws around a
+    /// button group. A squarer, full-bleed fill overlaps that capsule's
+    /// rounded ends and the seam between grouped buttons.
+    static let iconButtonFillInset: CGFloat = 2
 }
 
 struct RootView: View {
@@ -536,11 +539,15 @@ private struct ToolbarIconButtonBody: View {
     @State private var isHovered = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: ToolbarLayout.iconButtonCornerRadius, style: .continuous)
+        let shape = Capsule(style: .continuous)
 
         configuration.label
             .frame(width: ToolbarLayout.iconButtonWidth, height: ToolbarLayout.iconButtonHeight)
-            .background(backgroundStyle, in: shape)
+            .background {
+                shape
+                    .fill(backgroundStyle)
+                    .padding(ToolbarLayout.iconButtonFillInset)
+            }
             .contentShape(shape)
             .opacity(foregroundOpacity)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
