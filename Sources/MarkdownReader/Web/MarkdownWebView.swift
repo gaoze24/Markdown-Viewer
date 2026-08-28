@@ -30,10 +30,16 @@ struct MarkdownWebView: NSViewRepresentable {
         configuration.userContentController.add(context.coordinator, name: Coordinator.progressHandlerName)
         configuration.userContentController.add(context.coordinator, name: Coordinator.activeHeadingHandlerName)
 
-        let webView = WKWebView(frame: .zero, configuration: configuration)
+        let webView = DiagramZoomWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
         webView.navigationDelegate = context.coordinator
+        // Page magnification stays off: a pinch scales the diagram under the
+        // pointer rather than zooming the whole reader.
         webView.allowsMagnification = false
+        webView.onMagnify = { [weak webView, weak coordinator = context.coordinator] event in
+            guard let webView else { return }
+            coordinator?.magnifyDiagram(with: event, in: webView)
+        }
         webView.allowsBackForwardNavigationGestures = false
         configureScrollInsets(for: webView)
         context.coordinator.loadIfNeeded(in: webView, parent: self)
@@ -99,6 +105,16 @@ struct MarkdownWebView: NSViewRepresentable {
 
             let html = ReaderHTMLTemplate.makeDocument(bodyHTML: parent.bodyHTML, settings: parent.displaySettings)
             webView.loadHTMLString(html, baseURL: parent.baseURL)
+        }
+
+        func magnifyDiagram(with event: NSEvent, in webView: WKWebView) {
+            guard isLoaded, event.magnification != 0 else { return }
+
+            let point = webView.convert(event.locationInWindow, from: nil)
+            let y = webView.isFlipped ? point.y : webView.bounds.height - point.y
+            webView.evaluateJavaScript(
+                "window.reader?.magnifyDiagram(\(point.x), \(y), \(event.magnification));"
+            )
         }
 
         func applyDisplaySettingsIfNeeded(on webView: WKWebView) {
@@ -226,6 +242,17 @@ struct MarkdownWebView: NSViewRepresentable {
 
             return String(payload.dropFirst().dropLast())
         }
+    }
+}
+
+/// Forwards trackpad pinches to the page. `WKWebView` consumes the gesture
+/// itself when `allowsMagnification` is on and drops it otherwise, so the
+/// event has to be intercepted here.
+private final class DiagramZoomWebView: WKWebView {
+    var onMagnify: ((NSEvent) -> Void)?
+
+    override func magnify(with event: NSEvent) {
+        onMagnify?(event)
     }
 }
 

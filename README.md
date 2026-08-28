@@ -10,6 +10,7 @@ Markdown Reader is a lightweight, native-feeling macOS desktop app for reading l
 - `WebKit` gives us excellent text layout, smooth scrolling, image handling, tables, internal anchor navigation, and search highlighting without shipping a heavy Electron runtime.
 - A small in-repo Markdown renderer keeps the project self-contained and avoids pulling in external dependencies for the Markdown AST layer.
 - **KaTeX** is bundled locally for math because it is fast, lightweight, stable in a desktop WebView, and more performant than MathJax for a reading-first app.
+- **Mermaid** is bundled locally too, so diagram fences render without a network round trip. Both runtimes are injected only into documents that need them.
 
 This keeps the app lightweight, fast to launch, maintainable, and genuinely macOS-native in the places users notice most.
 
@@ -89,6 +90,8 @@ The project is split into a small core library and a native app target:
 - Table of contents sidebar
 - In-document search with next/previous navigation
 - Inline and display math via `$...$`, `$$...$$`, `\\(...\\)`, and `\\[...\\]`
+- Mermaid diagrams from ```` ```mermaid ```` fences, drawn offline and re-themed with the reader
+- Trackpad pinch to scale a diagram in place, drag to pan, double-click to fit
 - Relative image support
 - Light and dark appearance
 - Auto reload on external file changes

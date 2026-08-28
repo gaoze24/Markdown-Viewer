@@ -318,4 +318,31 @@ final class MarkdownRendererTests: XCTestCase {
     private func flattenedTitles(in items: [TableOfContentsItem]) -> [String] {
         items.flatMap { $0.flattened().map(\.title) }
     }
+
+    func testMermaidFencesBecomeDiagramPlaceholdersWithSourceFallback() {
+        let markdown = """
+        ```mermaid
+        flowchart LR
+            UI["React Web UI"] --> API["Fastify API"]
+        ```
+        """
+
+        let document = MarkdownRenderer().render(markdown: markdown, sourceURL: nil)
+        let source = """
+        flowchart LR
+            UI["React Web UI"] --> API["Fastify API"]
+        """
+
+        XCTAssertTrue(document.bodyHTML.contains("<div class=\"mermaid-diagram\""))
+        XCTAssertTrue(document.bodyHTML.contains("data-mermaid-source=\"\(Data(source.utf8).base64EncodedString())\""))
+        XCTAssertTrue(document.bodyHTML.contains("<pre class=\"mermaid-source\">"))
+        XCTAssertFalse(document.bodyHTML.contains("class=\"language-mermaid\""))
+    }
+
+    func testNonMermaidFencesStayCodeBlocks() {
+        let document = MarkdownRenderer().render(markdown: "```swift\nlet x = 1\n```", sourceURL: nil)
+
+        XCTAssertTrue(document.bodyHTML.contains("<pre class=\"code-block\"><code class=\"language-swift\">let x = 1</code></pre>"))
+        XCTAssertFalse(document.bodyHTML.contains("mermaid-diagram"))
+    }
 }

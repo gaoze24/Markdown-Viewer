@@ -115,10 +115,27 @@ private struct Parser {
             index += 1
         }
 
-        let code = codeLines.joined(separator: "\n").htmlEscaped()
+        let source = codeLines.joined(separator: "\n")
+
+        if fence.language?.lowercased() == "mermaid" {
+            return diagramPlaceholderHTML(source: source)
+        }
+
+        let code = source.htmlEscaped()
         let languageClass = fence.language.map { " class=\"language-\($0.htmlEscaped())\"" } ?? ""
         return """
         <pre class="code-block"><code\(languageClass)>\(code)</code></pre>
+        """
+    }
+
+    /// Mermaid fences keep their source in a base64 attribute so the reader can
+    /// draw them in the web view, and keep the raw text in a `<pre>` so the block
+    /// still reads as code when the diagram cannot be drawn.
+    private func diagramPlaceholderHTML(source: String) -> String {
+        let normalized = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let encoded = Data(normalized.utf8).base64EncodedString()
+        return """
+        <div class="mermaid-diagram" data-mermaid-source="\(encoded)"><pre class="mermaid-source"><code>\(normalized.htmlEscaped())</code></pre></div>
         """
     }
 

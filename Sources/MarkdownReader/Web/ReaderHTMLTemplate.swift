@@ -2,6 +2,7 @@ import Foundation
 
 enum ReaderHTMLTemplate {
     static let mathPlaceholderClass = "math-placeholder"
+    static let diagramPlaceholderClass = "mermaid-diagram"
 
     /// Shared with both the `[data-theme="dark"]` override and the
     /// `prefers-color-scheme: dark` auto-mode block so the two stay in sync.
@@ -54,6 +55,12 @@ enum ReaderHTMLTemplate {
             : ""
         let mathScript = includeMath
             ? "<script>\(mathAssets.katexScript)</script>"
+            : ""
+
+        let diagramAssets = BundledDiagramAssets.shared
+        let includeDiagrams = bodyHTML.contains(diagramPlaceholderClass) && diagramAssets.isAvailable
+        let diagramScript = includeDiagrams
+            ? "<script>\(diagramAssets.mermaidScript)</script>"
             : ""
 
         let themeAttribute = settings.colorTheme == .auto ? "" : " data-theme=\"\(settings.colorTheme.rawValue)\""
@@ -350,6 +357,63 @@ enum ReaderHTMLTemplate {
                     font-size: 0.845em;
                 }
 
+                .mermaid-diagram {
+                    display: flex;
+                    justify-content: center;
+                    width: 100%;
+                    max-width: 100%;
+                    overflow-x: auto;
+                    padding: 18px;
+                    background: var(--code-bg);
+                    border: 1px solid var(--code-border);
+                    border-radius: 12px;
+                    margin: 1.24em 0 1.34em;
+                }
+
+                .mermaid-diagram.rendered {
+                    display: block;
+                    overflow: hidden;
+                }
+
+                .mermaid-diagram .mermaid-viewport {
+                    display: flex;
+                    justify-content: center;
+                    transform-origin: 0 0;
+                    will-change: transform;
+                }
+
+                .mermaid-diagram.zoomed .mermaid-viewport {
+                    cursor: grab;
+                }
+
+                .mermaid-diagram.panning .mermaid-viewport {
+                    cursor: grabbing;
+                    user-select: none;
+                }
+
+                .mermaid-diagram svg {
+                    max-width: 100%;
+                    height: auto;
+                }
+
+                .mermaid-diagram .mermaid-source {
+                    width: 100%;
+                    margin: 0;
+                    overflow-x: auto;
+                }
+
+                .mermaid-diagram .mermaid-source code {
+                    display: block;
+                    width: max-content;
+                    min-width: 100%;
+                    background: transparent;
+                    padding: 0;
+                    white-space: pre;
+                    font-family: var(--font-mono);
+                    font-size: 0.845em;
+                    line-height: 1.65;
+                }
+
                 hr {
                     border: none;
                     height: 1px;
@@ -511,6 +575,7 @@ enum ReaderHTMLTemplate {
                 </div>
             </main>
             \(mathScript)
+            \(diagramScript)
             \(CodeHighlightingAssets.script)
             <script>
                 const headingSelector = '#reader-root h1[id], #reader-root h2[id], #reader-root h3[id], #reader-root h4[id], #reader-root h5[id], #reader-root h6[id]';
@@ -538,7 +603,8 @@ enum ReaderHTMLTemplate {
                     pendingForcedHeadingPost: false,
                     lastProgressPostTimestamp: 0,
                     lastHeadingPostTimestamp: 0,
-                    settlePostTimer: null
+                    settlePostTimer: null,
+                    diagramRenderToken: 0
                 };
 
                 function recomputeScrollMetrics() {
@@ -726,10 +792,14 @@ enum ReaderHTMLTemplate {
                 function applyDisplaySettings(fontSize, width, colorTheme) {
                     document.documentElement.style.setProperty('--base-font-size', `${fontSize}px`);
                     document.documentElement.style.setProperty('--reader-width', `${width}px`);
+                    const previousScheme = resolvedColorScheme();
                     if (colorTheme && colorTheme !== 'auto') {
                         document.documentElement.setAttribute('data-theme', colorTheme);
                     } else {
                         document.documentElement.removeAttribute('data-theme');
+                    }
+                    if (resolvedColorScheme() !== previousScheme) {
+                        renderDiagrams();
                     }
                     requestAnimationFrame(() => {
                         markMetricsDirty();
@@ -740,13 +810,13 @@ enum ReaderHTMLTemplate {
                     });
                 }
 
-                function decodeMathSource(encoded) {
+                function decodeBase64Source(encoded) {
                     try {
                         const binary = atob(encoded);
                         const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
                         return new TextDecoder().decode(bytes);
                     } catch (error) {
-                        console.warn('Failed to decode math source.', error);
+                        console.warn('Failed to decode block source.', error);
                         return '';
                     }
                 }
@@ -758,7 +828,7 @@ enum ReaderHTMLTemplate {
 
                     const placeholders = Array.from(document.querySelectorAll('.math-placeholder[data-math-source]'));
                     for (const node of placeholders) {
-                        const source = decodeMathSource(node.getAttribute('data-math-source') || '');
+                        const source = decodeBase64Source(node.getAttribute('data-math-source') || '');
                         const displayMode = node.classList.contains('display');
 
                         try {
@@ -774,6 +844,203 @@ enum ReaderHTMLTemplate {
                             console.warn('Math rendering failed.', error);
                         }
                     }
+                }
+
+                function resolvedColorScheme() {
+                    const declared = document.documentElement.getAttribute('data-theme');
+                    if (declared === 'dark' || declared === 'sepia' || declared === 'light') {
+                        return declared;
+                    }
+                    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+
+                function mermaidThemeName() {
+                    const scheme = resolvedColorScheme();
+                    if (scheme === 'dark') return 'dark';
+                    if (scheme === 'sepia') return 'neutral';
+                    return 'default';
+                }
+
+                function showDiagramSource(node, source) {
+                    node.classList.remove('rendered');
+                    node.textContent = '';
+                    const pre = document.createElement('pre');
+                    pre.className = 'mermaid-source';
+                    const code = document.createElement('code');
+                    code.textContent = source;
+                    pre.appendChild(code);
+                    node.appendChild(pre);
+                }
+
+                async function renderDiagrams() {
+                    if (typeof mermaid === 'undefined') return;
+
+                    const nodes = Array.from(document.querySelectorAll('.mermaid-diagram[data-mermaid-source]'));
+                    if (nodes.length === 0) return;
+
+                    // A later theme change supersedes an in-flight pass.
+                    const token = ++readerState.diagramRenderToken;
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        securityLevel: 'strict',
+                        theme: mermaidThemeName(),
+                        fontFamily: getComputedStyle(document.body).fontFamily
+                    });
+
+                    for (let index = 0; index < nodes.length; index += 1) {
+                        const node = nodes[index];
+                        const source = decodeBase64Source(node.getAttribute('data-mermaid-source') || '');
+                        if (!source) continue;
+
+                        const renderID = `mermaid-diagram-${token}-${index}`;
+                        try {
+                            const { svg, bindFunctions } = await mermaid.render(renderID, source);
+                            if (token !== readerState.diagramRenderToken) return;
+                            const viewport = document.createElement('div');
+                            viewport.className = 'mermaid-viewport';
+                            viewport.innerHTML = svg;
+                            node.textContent = '';
+                            node.appendChild(viewport);
+                            node.classList.add('rendered');
+                            bindFunctions?.(viewport);
+                            // A re-render (theme change) keeps whatever scale the reader had set.
+                            applyDiagramView(node);
+                        } catch (error) {
+                            if (token !== readerState.diagramRenderToken) return;
+                            // Mermaid leaves its measuring node behind when a diagram fails to parse.
+                            document.getElementById(`d${renderID}`)?.remove();
+                            showDiagramSource(node, source);
+                            console.warn('Diagram rendering failed.', error);
+                        }
+                    }
+
+                    markMetricsDirty();
+                    markHeadingsDirty();
+                    scheduleProgressPost(true);
+                    scheduleHeadingPost(true);
+                    scheduleSettlePost(0);
+                }
+
+                const diagramViews = new WeakMap();
+                const minDiagramScale = 1;
+                const maxDiagramScale = 5;
+
+                function diagramView(diagram) {
+                    let view = diagramViews.get(diagram);
+                    if (!view) {
+                        view = { scale: 1, x: 0, y: 0 };
+                        diagramViews.set(diagram, view);
+                    }
+                    return view;
+                }
+
+                /// The untransformed content box the viewport is laid out in.
+                function diagramContentBox(diagram) {
+                    const rect = diagram.getBoundingClientRect();
+                    const style = getComputedStyle(diagram);
+                    const left = parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+                    const top = parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop);
+                    return {
+                        left: rect.left + left,
+                        top: rect.top + top,
+                        width: diagram.clientWidth - left - parseFloat(style.paddingRight),
+                        height: diagram.clientHeight - top - parseFloat(style.paddingBottom)
+                    };
+                }
+
+                /// Keeps the scaled diagram covering its block instead of drifting
+                /// off into the padding.
+                function clampDiagramPan(diagram, view) {
+                    const viewport = diagram.querySelector('.mermaid-viewport');
+                    if (!viewport) return;
+
+                    const box = diagramContentBox(diagram);
+                    const scaledWidth = viewport.offsetWidth * view.scale;
+                    const scaledHeight = viewport.offsetHeight * view.scale;
+                    view.x = scaledWidth <= box.width ? 0 : Math.min(0, Math.max(box.width - scaledWidth, view.x));
+                    view.y = scaledHeight <= box.height ? 0 : Math.min(0, Math.max(box.height - scaledHeight, view.y));
+                }
+
+                function applyDiagramView(diagram) {
+                    const viewport = diagram.querySelector('.mermaid-viewport');
+                    if (!viewport) return;
+
+                    const view = diagramView(diagram);
+                    clampDiagramPan(diagram, view);
+                    viewport.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+                    diagram.classList.toggle('zoomed', view.scale > 1);
+                }
+
+                /// Scales the diagram under the pointer, holding the point being
+                /// pinched in place. Called from the trackpad pinch gesture.
+                function magnifyDiagram(clientX, clientY, magnification) {
+                    const diagram = document.elementFromPoint(clientX, clientY)?.closest('.mermaid-diagram.rendered');
+                    if (!diagram) return false;
+
+                    const view = diagramView(diagram);
+                    const nextScale = Math.min(maxDiagramScale, Math.max(minDiagramScale, view.scale * (1 + magnification)));
+                    if (nextScale === view.scale) return true;
+
+                    const box = diagramContentBox(diagram);
+                    const anchorX = clientX - box.left;
+                    const anchorY = clientY - box.top;
+                    const ratio = nextScale / view.scale;
+                    view.x = anchorX - (anchorX - view.x) * ratio;
+                    view.y = anchorY - (anchorY - view.y) * ratio;
+                    view.scale = nextScale;
+                    if (view.scale === minDiagramScale) {
+                        view.x = 0;
+                        view.y = 0;
+                    }
+
+                    applyDiagramView(diagram);
+                    return true;
+                }
+
+                function resetDiagramZoom(diagram) {
+                    const view = diagramView(diagram);
+                    view.scale = 1;
+                    view.x = 0;
+                    view.y = 0;
+                    applyDiagramView(diagram);
+                }
+
+                function installDiagramPanning() {
+                    let panning = null;
+
+                    document.addEventListener('pointerdown', event => {
+                        const diagram = event.target.closest?.('.mermaid-diagram.zoomed');
+                        if (!diagram || event.button !== 0) return;
+                        panning = { diagram, x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+                        diagram.classList.add('panning');
+                        diagram.setPointerCapture?.(event.pointerId);
+                        event.preventDefault();
+                    });
+
+                    document.addEventListener('pointermove', event => {
+                        if (!panning) return;
+                        const view = diagramView(panning.diagram);
+                        view.x += event.clientX - panning.x;
+                        view.y += event.clientY - panning.y;
+                        panning.x = event.clientX;
+                        panning.y = event.clientY;
+                        applyDiagramView(panning.diagram);
+                    });
+
+                    const endPan = () => {
+                        if (!panning) return;
+                        panning.diagram.classList.remove('panning');
+                        panning.diagram.releasePointerCapture?.(panning.pointerId);
+                        panning = null;
+                    };
+                    document.addEventListener('pointerup', endPan);
+                    document.addEventListener('pointercancel', endPan);
+
+                    document.addEventListener('dblclick', event => {
+                        const diagram = event.target.closest?.('.mermaid-diagram.rendered');
+                        if (!diagram) return;
+                        resetDiagramZoom(diagram);
+                    });
                 }
 
                 function clearSearchHighlights() {
@@ -878,7 +1145,7 @@ enum ReaderHTMLTemplate {
                     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
                         acceptNode(node) {
                             if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-                            if (node.parentElement?.closest('.katex, .katex-mathml, script, style, mark')) return NodeFilter.FILTER_REJECT;
+                            if (node.parentElement?.closest('.katex, .katex-mathml, .mermaid-diagram.rendered, script, style, mark')) return NodeFilter.FILTER_REJECT;
                             return NodeFilter.FILTER_ACCEPT;
                         }
                     });
@@ -924,6 +1191,7 @@ enum ReaderHTMLTemplate {
 
                 window.reader = {
                     applyDisplaySettings,
+                    magnifyDiagram,
                     performSearch,
                     stepSearch,
                     scrollToAnchor
@@ -931,6 +1199,8 @@ enum ReaderHTMLTemplate {
 
                 function initialize() {
                     renderMath();
+                    renderDiagrams();
+                    installDiagramPanning();
                     highlightCodeBlocks();
                     refreshHeadingCache();
                     recomputeScrollMetrics();
